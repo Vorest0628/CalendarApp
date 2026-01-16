@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Event } from '../types/event';
 import { EventDAO } from '../database/EventDAO';
+import ReminderService from '../services/ReminderService';
 
 let eventDAO: EventDAO | null = null;
 
@@ -28,9 +29,13 @@ interface EventStore {
   /**
    * 添加日程
    * @param event - 日程对象（不含 id、createdAt、updatedAt）
-   * @returns Promise<void>
+   * @param reminderMinutes - 提醒时间列表（分钟）
+   * @returns Promise<Event> - 创建的日程对象
    */
-  addEvent: (event: Omit<Event, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  addEvent: (
+    event: Omit<Event, 'id' | 'createdAt' | 'updatedAt'>,
+    reminderMinutes?: number[]
+  ) => Promise<Event>;
 
   /**
    * 更新日程
@@ -41,7 +46,7 @@ interface EventStore {
   updateEvent: (id: string, updates: Partial<Event>) => Promise<void>;
 
   /**
-   * 删除日程
+   * 删除日程（同时删除相关提醒）
    * @param id - 日程 ID
    * @returns Promise<void>
    */
@@ -85,11 +90,27 @@ export const useEventStore = create<EventStore>((set, get) => ({
     }
   },
 
-  addEvent: async (event: Omit<Event, 'id' | 'createdAt' | 'updatedAt'>) => {
+  addEvent: async (
+    event: Omit<Event, 'id' | 'createdAt' | 'updatedAt'>,
+    reminderMinutes?: number[]
+  ) => {
     try {
       const dao = getEventDAO();
       const newEvent = await dao.addEvent(event);
+      
+      // 创建提醒
+      if (reminderMinutes && reminderMinutes.length > 0) {
+        try {
+          await ReminderService.createReminders(newEvent, reminderMinutes);
+          console.log(`Created ${reminderMinutes.length} reminders for event:`, newEvent.id);
+        } catch (error) {
+          console.error('Failed to create reminders:', error);
+          // 不阻断日程创建
+        }
+      }
+      
       set(state => ({ events: [...state.events, newEvent] }));
+      return newEvent;
     } catch (error) {
       console.error('Failed to add event:', error);
       throw error;
@@ -113,6 +134,15 @@ export const useEventStore = create<EventStore>((set, get) => ({
 
   deleteEvent: async (id: string) => {
     try {
+      // 先删除提醒
+      try {
+        await ReminderService.deleteEventReminders(id);
+      } catch (error) {
+        console.error('Failed to delete reminders:', error);
+        // 继续删除日程
+      }
+      
+      // 删除日程
       const dao = getEventDAO();
       await dao.deleteEvent(id);
       set(state => ({

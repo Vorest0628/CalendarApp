@@ -104,6 +104,20 @@ class DatabaseService {
         );
       `);
 
+      // 创建 reminders 表
+      await this.db.executeSql(`
+        CREATE TABLE IF NOT EXISTS reminders (
+          id TEXT PRIMARY KEY,
+          eventId TEXT NOT NULL,
+          triggerTime INTEGER NOT NULL,
+          method TEXT DEFAULT 'notification',
+          status TEXT DEFAULT 'pending',
+          notificationId TEXT,
+          createdAt INTEGER NOT NULL,
+          FOREIGN KEY (eventId) REFERENCES events(id) ON DELETE CASCADE
+        );
+      `);
+
       console.log('Tables created successfully');
     } catch (error) {
       console.error('Failed to create tables:', error);
@@ -124,6 +138,18 @@ class DatabaseService {
 
       await this.db.executeSql(`
         CREATE INDEX IF NOT EXISTS idx_events_calendarId ON events(calendarId);
+      `);
+
+      await this.db.executeSql(`
+        CREATE INDEX IF NOT EXISTS idx_reminders_eventId ON reminders(eventId);
+      `);
+
+      await this.db.executeSql(`
+        CREATE INDEX IF NOT EXISTS idx_reminders_triggerTime ON reminders(triggerTime);
+      `);
+
+      await this.db.executeSql(`
+        CREATE INDEX IF NOT EXISTS idx_reminders_status ON reminders(status);
       `);
 
       console.log('Indexes created successfully');

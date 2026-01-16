@@ -16,6 +16,8 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Event } from '../../types/event';
 import { colors } from '../../theme/colors';
+import ReminderPicker from './ReminderPicker';
+import ReminderService from '../../services/ReminderService';
 
 // 预设颜色选项
 const COLOR_OPTIONS = [
@@ -31,7 +33,10 @@ const COLOR_OPTIONS = [
 
 interface EventFormProps {
   initialEvent?: Event; // 初始数据（编辑模式）
-  onSubmit: (event: Omit<Event, 'id' | 'createdAt' | 'updatedAt'>) => void; // 提交回调
+  onSubmit: (
+    event: Omit<Event, 'id' | 'createdAt' | 'updatedAt'>,
+    reminderMinutes?: number[]
+  ) => void; // 提交回调
   onCancel: () => void; // 取消回调
 }
 
@@ -59,6 +64,7 @@ export const EventForm: React.FC<EventFormProps> = ({
   const [color, setColor] = useState<string>(
     initialEvent?.color || COLOR_OPTIONS[0]
   );
+  const [reminderMinutes, setReminderMinutes] = useState<number[]>([]);
   const [showStartPicker, setShowStartPicker] = useState<boolean>(false);
   const [showEndPicker, setShowEndPicker] = useState<boolean>(false);
   const [pickerMode, setPickerMode] = useState<'date' | 'time'>('date');
@@ -76,7 +82,7 @@ export const EventForm: React.FC<EventFormProps> = ({
     }
   }, [isAllDay]);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     // 表单验证
     if (!title.trim()) {
       Alert.alert('提示', '请输入日程标题');
@@ -98,7 +104,8 @@ export const EventForm: React.FC<EventFormProps> = ({
       color,
     };
 
-    onSubmit(eventData);
+    // 提交日程数据，并传递提醒设置
+    onSubmit(eventData, reminderMinutes.length > 0 ? reminderMinutes : undefined);
   };
 
   const handleStartDateChange = (event: any, selectedDate?: Date) => {
@@ -259,6 +266,14 @@ export const EventForm: React.FC<EventFormProps> = ({
               />
             ))}
           </View>
+        </View>
+
+        {/* 提醒选择 */}
+        <View style={styles.formGroup}>
+          <ReminderPicker
+            selectedMinutes={reminderMinutes}
+            onSelect={setReminderMinutes}
+          />
         </View>
 
         {/* 按钮 */}

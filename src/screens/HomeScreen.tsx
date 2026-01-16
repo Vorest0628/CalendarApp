@@ -56,9 +56,12 @@ export default function HomeScreen() {
   );
 
   // 添加日程
-  const handleAddEvent = async (eventData: Omit<Event, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const handleAddEvent = async (
+    eventData: Omit<Event, 'id' | 'createdAt' | 'updatedAt'>,
+    reminderMinutes?: number[]
+  ) => {
     try {
-      await addEvent(eventData);
+      await addEvent(eventData, reminderMinutes);
       setShowAddModal(false);
     } catch (error) {
       console.error('Failed to add event:', error);
@@ -66,10 +69,14 @@ export default function HomeScreen() {
   };
 
   // 编辑日程
-  const handleEditEvent = async (eventData: Omit<Event, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const handleEditEvent = async (
+    eventData: Omit<Event, 'id' | 'createdAt' | 'updatedAt'>,
+    reminderMinutes?: number[]
+  ) => {
     if (selectedEvent) {
       try {
         await updateEvent(selectedEvent.id, eventData);
+        // 注意：编辑时的提醒更新需要额外处理
         setShowEditModal(false);
         setShowDetailModal(false);
         setSelectedEvent(null);

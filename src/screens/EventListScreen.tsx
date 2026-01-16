@@ -70,10 +70,14 @@ export default function EventListScreen() {
   };
 
   // 编辑日程
-  const handleEditEvent = async (eventData: Omit<Event, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const handleEditEvent = async (
+    eventData: Omit<Event, 'id' | 'createdAt' | 'updatedAt'>,
+    reminderMinutes?: number[]
+  ) => {
     if (selectedEvent) {
       try {
         await updateEvent(selectedEvent.id, eventData);
+        // 注意：编辑时的提醒更新需要额外处理
         setShowEditModal(false);
         setSelectedEvent(null);
       } catch (error) {
