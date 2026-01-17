@@ -82,8 +82,25 @@ export const useEventStore = create<EventStore>((set, get) => ({
     set({ isLoading: true });
     try {
       const dao = getEventDAO();
-      const events = await dao.getEvents(startDate, endDate);
-      set({ events, isLoading: false });
+      const newEvents = await dao.getEvents(startDate, endDate);
+      
+      // 合并事件数据，避免覆盖其他时间段的事件
+      set(state => {
+        const existingEvents = state.events;
+        const mergedEvents = [...existingEvents];
+        
+        // 去重：如果新事件已存在，则替换；否则添加
+        newEvents.forEach(newEvent => {
+          const existingIndex = mergedEvents.findIndex(e => e.id === newEvent.id);
+          if (existingIndex >= 0) {
+            mergedEvents[existingIndex] = newEvent;
+          } else {
+            mergedEvents.push(newEvent);
+          }
+        });
+        
+        return { events: mergedEvents, isLoading: false };
+      });
     } catch (error) {
       console.error('Failed to load events:', error);
       set({ isLoading: false });

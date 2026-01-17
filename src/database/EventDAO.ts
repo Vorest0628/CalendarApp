@@ -8,10 +8,13 @@ import { Event } from '../types/event';
 import { v4 as uuidv4 } from 'uuid';
 
 export class EventDAO {
-  private db: SQLiteDatabase;
+  private db: SQLiteDatabase | null = null;
 
-  constructor() {
-    this.db = DatabaseService.getDatabase();
+  private getDb(): SQLiteDatabase {
+    if (!this.db) {
+      this.db = DatabaseService.getDatabase();
+    }
+    return this.db;
   }
 
   /**
@@ -24,7 +27,7 @@ export class EventDAO {
       const id = uuidv4();
       const now = Date.now();
 
-      await this.db.executeSql(
+      await this.getDb().executeSql(
         `INSERT INTO events (
           id, title, description, location, startTime, endTime, 
           isAllDay, color, calendarId, rrule, isLunar, 
@@ -126,7 +129,7 @@ export class EventDAO {
       values.push(id);
 
       const sql = `UPDATE events SET ${fields.join(', ')} WHERE id = ?`;
-      await this.db.executeSql(sql, values);
+      await this.getDb().executeSql(sql, values);
     } catch (error) {
       console.error('Failed to update event:', error);
       throw error;
@@ -140,7 +143,7 @@ export class EventDAO {
    */
   async deleteEvent(id: string): Promise<void> {
     try {
-      await this.db.executeSql('DELETE FROM events WHERE id = ?', [id]);
+      await this.getDb().executeSql('DELETE FROM events WHERE id = ?', [id]);
     } catch (error) {
       console.error('Failed to delete event:', error);
       throw error;
@@ -154,7 +157,7 @@ export class EventDAO {
    */
   async getEventById(id: string): Promise<Event | null> {
     try {
-      const result = await this.db.executeSql(
+      const result = await this.getDb().executeSql(
         'SELECT * FROM events WHERE id = ?',
         [id]
       );
@@ -177,7 +180,7 @@ export class EventDAO {
    */
   async getEvents(startDate: Date, endDate: Date): Promise<Event[]> {
     try {
-      const result = await this.db.executeSql(
+      const result = await this.getDb().executeSql(
         `SELECT * FROM events 
          WHERE startTime >= ? AND startTime <= ?
          ORDER BY startTime ASC`,
@@ -223,7 +226,7 @@ export class EventDAO {
   async searchEvents(keyword: string): Promise<Event[]> {
     try {
       const searchPattern = `%${keyword}%`;
-      const result = await this.db.executeSql(
+      const result = await this.getDb().executeSql(
         `SELECT * FROM events 
          WHERE title LIKE ? OR description LIKE ? OR location LIKE ?
          ORDER BY startTime DESC

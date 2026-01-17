@@ -7,10 +7,13 @@ import DatabaseService from './DatabaseService';
 import { Reminder, ReminderStatus, ReminderMethod } from '../types/event';
 
 export class ReminderDAO {
-  private db: SQLiteDatabase;
+  private db: SQLiteDatabase | null = null;
 
-  constructor() {
-    this.db = DatabaseService.getDatabase();
+  private getDb(): SQLiteDatabase {
+    if (!this.db) {
+      this.db = DatabaseService.getDatabase();
+    }
+    return this.db;
   }
 
   /**
@@ -18,7 +21,7 @@ export class ReminderDAO {
    */
   async addReminder(reminder: Reminder): Promise<void> {
     try {
-      await this.db.executeSql(
+      await this.getDb().executeSql(
         `INSERT INTO reminders (id, eventId, triggerTime, method, status, notificationId, createdAt)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
@@ -73,7 +76,7 @@ export class ReminderDAO {
 
       values.push(id);
 
-      await this.db.executeSql(
+      await this.getDb().executeSql(
         `UPDATE reminders SET ${fields.join(', ')} WHERE id = ?`,
         values
       );
@@ -90,7 +93,7 @@ export class ReminderDAO {
    */
   async deleteReminder(id: string): Promise<void> {
     try {
-      await this.db.executeSql('DELETE FROM reminders WHERE id = ?', [id]);
+      await this.getDb().executeSql('DELETE FROM reminders WHERE id = ?', [id]);
       console.log('Reminder deleted:', id);
     } catch (error) {
       console.error('Failed to delete reminder:', error);
@@ -103,7 +106,7 @@ export class ReminderDAO {
    */
   async deleteRemindersByEventId(eventId: string): Promise<void> {
     try {
-      await this.db.executeSql('DELETE FROM reminders WHERE eventId = ?', [
+      await this.getDb().executeSql('DELETE FROM reminders WHERE eventId = ?', [
         eventId,
       ]);
       console.log('All reminders deleted for event:', eventId);
@@ -118,7 +121,7 @@ export class ReminderDAO {
    */
   async getReminderById(id: string): Promise<Reminder | null> {
     try {
-      const result = await this.db.executeSql(
+      const result = await this.getDb().executeSql(
         'SELECT * FROM reminders WHERE id = ?',
         [id]
       );
@@ -139,7 +142,7 @@ export class ReminderDAO {
    */
   async getRemindersByEventId(eventId: string): Promise<Reminder[]> {
     try {
-      const result = await this.db.executeSql(
+      const result = await this.getDb().executeSql(
         'SELECT * FROM reminders WHERE eventId = ? ORDER BY triggerTime ASC',
         [eventId]
       );
@@ -161,7 +164,7 @@ export class ReminderDAO {
    */
   async getPendingReminders(): Promise<Reminder[]> {
     try {
-      const result = await this.db.executeSql(
+      const result = await this.getDb().executeSql(
         `SELECT * FROM reminders 
          WHERE status = ? AND triggerTime > ?
          ORDER BY triggerTime ASC`,

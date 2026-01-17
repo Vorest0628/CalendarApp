@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet, Modal, TouchableOpacity, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -10,7 +10,6 @@ import WeekView from '../components/Calendar/WeekView';
 import DayView from '../components/Calendar/DayView';
 import Button from '../components/Common/Button';
 import { EventForm, EventDetail, EventCard } from '../components/Event';
-import DatabaseService from '../database/DatabaseService';
 import { Event } from '../types/event';
 
 type ViewType = 'month' | 'week' | 'day';
@@ -21,30 +20,10 @@ export default function HomeScreen() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
-  const [isDbInitialized, setIsDbInitialized] = useState(false);
 
-  // 初始化数据库（只执行一次）
-  useEffect(() => {
-    const initDatabase = async () => {
-      try {
-        await DatabaseService.init();
-        console.log('Database initialized successfully');
-        setIsDbInitialized(true);
-      } catch (error) {
-        console.error('Failed to initialize database:', error);
-      }
-    };
-
-    initDatabase();
-  }, []);
-
-  // 当页面获得焦点且数据库已初始化时重新加载当月日程
+  // 当页面获得焦点时重新加载当月日程
   useFocusEffect(
     React.useCallback(() => {
-      if (!isDbInitialized) {
-        return;
-      }
-      
       const loadData = async () => {
         const now = new Date();
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -52,7 +31,7 @@ export default function HomeScreen() {
         await loadEvents(startOfMonth, endOfMonth);
       };
       loadData();
-    }, [isDbInitialized])
+    }, [loadEvents])
   );
 
   // 添加日程

@@ -1,42 +1,125 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, PanResponder, Dimensions } from 'react-native';
 import { theme } from '../../theme';
 import {
-  getDaysInMonth,
-  getFirstDayOfMonth,
   isToday,
   isSameDay,
   getYearMonthString,
 } from '../../utils/dateUtils';
 import { useEventStore } from '../../store/eventStore';
-import Button from '../Common/Button';
+import { getMonthLazyLoadData, MonthData } from '../../utils/lazyLoadUtils';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25; // 滑动阈值
 
 export default function MonthView() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const { selectedDate, setSelectedDate, getEventsForDate } = useEventStore();
+  
+  const translateX = useRef(new Animated.Value(0)).current;
+  const isAnimatingRef = useRef(false); // 标记是否正在动画中
+  
+  // 使用时间戳作为依赖项，确保 Date 对象变化能被检测到
+  const currentDateKey = currentDate.getTime();
+  
+  // 手动管理懒加载数据状态
+  const [lazyLoadData, setLazyLoadData] = useState(() => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth() + 1;
+    console.log('Initial lazy load data for:', year, month);
+    return getMonthLazyLoadData(year, month);
+  });
+  
+  // 使用 ref 保存最新的懒加载数据，避免闭包问题
+  const lazyLoadDataRef = useRef(lazyLoadData);
+  
+  // 每次 lazyLoadData 更新时，同步更新 ref
+  useEffect(() => {
+    lazyLoadDataRef.current = lazyLoadData;
+    
+    // 如果正在动画中且数据已更新，重置 translateX
+    if (isAnimatingRef.current) {
+      console.log('Data updated after animation, resetting translateX');
+      translateX.setValue(0);
+      isAnimatingRef.current = false;
+    }
+  }, [lazyLoadData]);
 
-  const year = currentDate.getFullYear();
-  const month = currentDate.getMonth() + 1; // JavaScript 月份是 0-11，需要 +1
+  // 监听 currentDateKey 变化，手动更新懒加载数据
+  useEffect(() => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth() + 1;
+    console.log('useEffect triggered! Updating lazy load data for:', year, month);
+    const newData = getMonthLazyLoadData(year, month);
+    console.log('New data calculated:', newData);
+    setLazyLoadData(newData);
+  }, [currentDateKey]); // 使用时间戳作为依赖项
 
-  const daysInMonth = getDaysInMonth(year, month);
-  const firstDayOfWeek = getFirstDayOfMonth(year, month);
+  // 直接从 lazyLoadData 解构，确保使用最新数据
+  const { prev: prevMonthData, current: currentMonthData, next: nextMonthData } = lazyLoadData;
+  
+  // 用于显示标题的年月
+  const year = currentMonthData.year;
+  const month = currentMonthData.month;
+  console.log('Rendering month view for:', year, month);
 
-  const goToPrevMonth = () => {
-    setCurrentDate(new Date(year, month - 2, 1));
-  };
-
-  const goToNextMonth = () => {
-    setCurrentDate(new Date(year, month, 1));
-  };
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && Math.abs(gestureState.dx) > 10;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        translateX.setValue(gestureState.dx);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dx > SWIPE_THRESHOLD) {
+          // 向右滑动 - 上一个月
+          isAnimatingRef.current = true;
+          Animated.timing(translateX, {
+            toValue: SCREEN_WIDTH,
+            duration: 200,
+            useNativeDriver: true,
+          }).start(() => {
+            // 使用 ref 获取最新的懒加载数据
+            const latestData = lazyLoadDataRef.current;
+            const targetDate = new Date(latestData.prev.year, latestData.prev.month - 1, 1);
+            console.log('Swiping to previous month:', latestData.prev.year, latestData.prev.month);
+            setCurrentDate(targetDate);
+            // 不立即重置 translateX，等待 lazyLoadData 更新后再重置
+          });
+        } else if (gestureState.dx < -SWIPE_THRESHOLD) {
+          // 向左滑动 - 下一个月
+          isAnimatingRef.current = true;
+          Animated.timing(translateX, {
+            toValue: -SCREEN_WIDTH,
+            duration: 200,
+            useNativeDriver: true,
+          }).start(() => {
+            // 使用 ref 获取最新的懒加载数据
+            const latestData = lazyLoadDataRef.current;
+            const targetDate = new Date(latestData.next.year, latestData.next.month - 1, 1);
+            console.log('Swiping to next month:', latestData.next.year, latestData.next.month);
+            setCurrentDate(targetDate);
+            // 不立即重置 translateX，等待 lazyLoadData 更新后再重置
+          });
+        } else {
+          // 回弹
+          Animated.spring(translateX, {
+            toValue: 0,
+            useNativeDriver: true,
+          }).start();
+        }
+      },
+    })
+  ).current;
 
   const handleDatePress = (date: Date) => {
     setSelectedDate(date);
   };
 
-  const renderEmptyCells = () => {
+  const renderEmptyCells = (count: number) => {
     const cells = [];
-    for (let i = 0; i < firstDayOfWeek; i++) {
+    for (let i = 0; i < count; i++) {
       cells.push(<View key={`empty-${i}`} style={styles.dayCell} />);
     }
     return cells;
@@ -74,24 +157,17 @@ export default function MonthView() {
     );
   };
 
+  const renderMonthGrid = (monthData: MonthData) => (
+    <View style={styles.monthGrid}>
+      {renderEmptyCells(monthData.firstDayOfWeek)}
+      {monthData.daysInMonth.map(date => renderDayCell(date))}
+    </View>
+  );
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Button
-          onPress={goToPrevMonth}
-          variant="text"
-          icon={<Icon name="chevron-left" size={28} color={theme.colors.text} />}
-          style={styles.navButton}
-        />
-
         <Text style={styles.headerTitle}>{getYearMonthString(year, month)}</Text>
-
-        <Button
-          onPress={goToNextMonth}
-          variant="text"
-          icon={<Icon name="chevron-right" size={28} color={theme.colors.text} />}
-          style={styles.navButton}
-        />
       </View>
 
       <View style={styles.weekRow}>
@@ -102,10 +178,26 @@ export default function MonthView() {
         ))}
       </View>
 
-      <View style={styles.daysContainer}>
-        {renderEmptyCells()}
-        {daysInMonth.map(date => renderDayCell(date))}
-      </View>
+      <Animated.View
+        style={[
+          styles.swipeContainer,
+          {
+            transform: [{ translateX }],
+            // 初始偏移量：向左偏移一个屏幕宽度，显示中间的 currentMonthData
+            marginLeft: -SCREEN_WIDTH,
+          },
+        ]}
+        {...panResponder.panHandlers}>
+        <View style={styles.monthWrapper}>
+          {renderMonthGrid(prevMonthData)}
+        </View>
+        <View style={styles.monthWrapper}>
+          {renderMonthGrid(currentMonthData)}
+        </View>
+        <View style={styles.monthWrapper}>
+          {renderMonthGrid(nextMonthData)}
+        </View>
+      </Animated.View>
     </View>
   );
 }
@@ -113,22 +205,28 @@ export default function MonthView() {
 const styles = StyleSheet.create({
   container: {
     backgroundColor: theme.colors.background,
+    overflow: 'hidden',
   },
   header: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     paddingVertical: theme.spacing.md,
     paddingHorizontal: theme.spacing.md,
-  },
-  navButton: {
-    padding: 0,
-    minWidth: 40,
   },
   headerTitle: {
     fontSize: theme.fontSize.lg,
     fontWeight: 'bold',
     color: theme.colors.text,
+  },
+  swipeContainer: {
+    flexDirection: 'row',
+  },
+  monthWrapper: {
+    width: SCREEN_WIDTH,
+  },
+  monthGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
   },
   weekRow: {
     flexDirection: 'row',
@@ -144,10 +242,6 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     color: theme.colors.textSecondary,
     fontWeight: '600',
-  },
-  daysContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
   },
   dayCell: {
     width: '14.28%',

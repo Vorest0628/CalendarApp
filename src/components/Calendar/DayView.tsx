@@ -1,21 +1,114 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import React, { useRef, useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Animated, PanResponder, Dimensions } from 'react-native';
 import dayjs from 'dayjs';
 import { theme } from '../../theme';
 import { useEventStore } from '../../store/eventStore';
+import { getDayLazyLoadData } from '../../utils/lazyLoadUtils';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
 
 export default function DayView() {
-  const { selectedDate, getEventsForDate } = useEventStore();
-  const events = getEventsForDate(selectedDate);
+  const { selectedDate, setSelectedDate, getEventsForDate } = useEventStore();
+  const translateX = useRef(new Animated.Value(0)).current;
+  const isAnimatingRef = useRef(false); // 标记是否正在动画中
   const hours = Array.from({ length: 24 }, (_, i) => i);
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.dateText}>{dayjs(selectedDate).format('YYYY年M月D日')}</Text>
-        <Text style={styles.weekDayText}>{dayjs(selectedDate).format('dddd')}</Text>
-      </View>
+  // 使用时间戳作为依赖项，确保 Date 对象变化能被检测到
+  const selectedDateKey = selectedDate.getTime();
 
+  // 手动管理懒加载数据状态
+  const [lazyLoadData, setLazyLoadData] = useState(() => {
+    console.log('Initial day lazy load data');
+    return getDayLazyLoadData(selectedDate);
+  });
+  
+  // 使用 ref 保存最新的懒加载数据，避免闭包问题
+  const lazyLoadDataRef = useRef(lazyLoadData);
+  
+  // 每次 lazyLoadData 更新时，同步更新 ref
+  useEffect(() => {
+    lazyLoadDataRef.current = lazyLoadData;
+    
+    // 如果正在动画中且数据已更新，重置 translateX
+    if (isAnimatingRef.current) {
+      console.log('Day data updated after animation, resetting translateX');
+      translateX.setValue(0);
+      isAnimatingRef.current = false;
+    }
+  }, [lazyLoadData]);
+
+  // 监听 selectedDateKey 变化，手动更新懒加载数据
+  useEffect(() => {
+    console.log('useEffect triggered! Updating day lazy load data for:', selectedDate);
+    const newData = getDayLazyLoadData(selectedDate);
+    setLazyLoadData(newData);
+  }, [selectedDateKey]);
+
+  const { prev: prevDayData, current: currentDayData, next: nextDayData } = lazyLoadData;
+
+  // 日期标题的滑动手势处理
+  const headerPanResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && Math.abs(gestureState.dx) > 10;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        translateX.setValue(gestureState.dx);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dx > SWIPE_THRESHOLD) {
+          // 向右滑动 - 上一天
+          isAnimatingRef.current = true;
+          Animated.timing(translateX, {
+            toValue: SCREEN_WIDTH,
+            duration: 200,
+            useNativeDriver: true,
+          }).start(() => {
+            // 使用 ref 获取最新的懒加载数据
+            const latestData = lazyLoadDataRef.current;
+            console.log('Swiping to previous day');
+            setSelectedDate(latestData.prev.date);
+            // 不立即重置 translateX，等待 lazyLoadData 更新后再重置
+          });
+        } else if (gestureState.dx < -SWIPE_THRESHOLD) {
+          // 向左滑动 - 下一天
+          isAnimatingRef.current = true;
+          Animated.timing(translateX, {
+            toValue: -SCREEN_WIDTH,
+            duration: 200,
+            useNativeDriver: true,
+          }).start(() => {
+            // 使用 ref 获取最新的懒加载数据
+            const latestData = lazyLoadDataRef.current;
+            console.log('Swiping to next day');
+            setSelectedDate(latestData.next.date);
+            // 不立即重置 translateX，等待 lazyLoadData 更新后再重置
+          });
+        } else {
+          // 回弹
+          Animated.spring(translateX, {
+            toValue: 0,
+            useNativeDriver: true,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
+  // 渲染日期标题（带滑动功能）
+  const renderHeader = (date: Date) => (
+    <View style={styles.header}>
+      <Text style={styles.dateText}>{dayjs(date).format('YYYY年M月D日')}</Text>
+      <Text style={styles.weekDayText}>{dayjs(date).format('dddd')}</Text>
+    </View>
+  );
+
+  // 渲染日程内容
+  const renderDayContent = (date: Date) => {
+    const events = getEventsForDate(date);
+    
+    return (
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {hours.map(hour => {
           const hourEvents = events.filter(event => {
@@ -48,6 +141,35 @@ export default function DayView() {
           );
         })}
       </ScrollView>
+    );
+  };
+
+  return (
+    <View style={styles.container}>
+      {/* 日期标题（支持左右滑动切换日期） */}
+      <Animated.View
+        style={[
+          styles.headerContainer,
+          {
+            transform: [{ translateX }],
+            // 初始偏移量：向左偏移一个屏幕宽度，显示中间的 currentDayData
+            marginLeft: -SCREEN_WIDTH,
+          },
+        ]}
+        {...headerPanResponder.panHandlers}>
+        <View style={styles.dayWrapper}>
+          {renderHeader(prevDayData.date)}
+        </View>
+        <View style={styles.dayWrapper}>
+          {renderHeader(currentDayData.date)}
+        </View>
+        <View style={styles.dayWrapper}>
+          {renderHeader(nextDayData.date)}
+        </View>
+      </Animated.View>
+
+      {/* 时间线区域（保持上下滚动） */}
+      {renderDayContent(selectedDate)}
     </View>
   );
 }
@@ -56,6 +178,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
+    overflow: 'hidden',
+  },
+  headerContainer: {
+    flexDirection: 'row',
+  },
+  dayWrapper: {
+    width: SCREEN_WIDTH,
   },
   header: {
     padding: theme.spacing.md,
