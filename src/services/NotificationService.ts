@@ -147,7 +147,6 @@ class NotificationService {
         trigger
       );
 
-      console.log('Notification scheduled:', notificationId);
       return notificationId;
     } catch (error) {
       console.error('Failed to schedule notification:', error);

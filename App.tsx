@@ -9,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
 import { theme } from './src/theme';
 import DatabaseService from './src/database/DatabaseService';
+import NotificationService from './src/services/NotificationService';
 
 function App(): React.JSX.Element {
   const [isDbReady, setIsDbReady] = useState(false);
@@ -20,6 +21,12 @@ function App(): React.JSX.Element {
         console.log('Initializing database...');
         await DatabaseService.init();
         console.log('Database initialized successfully');
+        
+        // 初始化通知服务（创建通知渠道等）
+        console.log('Initializing notification service...');
+        await NotificationService.checkPermission();
+        console.log('Notification service initialized');
+        
         setIsDbReady(true);
       } catch (error) {
         console.error('Failed to initialize database:', error);

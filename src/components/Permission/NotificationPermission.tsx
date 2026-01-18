@@ -9,7 +9,10 @@ import {
   StyleSheet,
   Linking,
   Platform,
+  Modal,
+  Pressable,
 } from 'react-native';
+import { BlurView } from '@react-native-community/blur';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import NotificationService from '../../services/NotificationService';
 import { colors } from '../../theme/colors';
@@ -90,45 +93,83 @@ const NotificationPermission: React.FC<NotificationPermissionProps> = ({
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.iconContainer}>
-        <Icon name="notifications-off" size={48} color={colors.warning} />
-      </View>
-
-      <Text style={styles.title}>开启通知权限</Text>
-      <Text style={styles.message}>
-        为了及时提醒您的日程安排，请允许应用发送通知
-      </Text>
-
-      <TouchableOpacity style={styles.primaryButton} onPress={requestPermission}>
-        <Text style={styles.primaryButtonText}>允许通知</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.secondaryButton} onPress={openSettings}>
-        <Text style={styles.secondaryButtonText}>前往设置</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.dismissButton}
+    <Modal
+      visible={showPrompt}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={() => setShowPrompt(false)}>
+      <Pressable 
+        style={styles.backdrop}
         onPress={() => setShowPrompt(false)}>
-        <Text style={styles.dismissButtonText}>稍后再说</Text>
-      </TouchableOpacity>
-    </View>
+        {Platform.OS === 'ios' ? (
+          <BlurView
+            style={StyleSheet.absoluteFill}
+            blurType="dark"
+            blurAmount={10}
+            reducedTransparencyFallbackColor={colors.text}
+          />
+        ) : (
+          <View style={styles.androidBackdrop} />
+        )}
+      </Pressable>
+      
+      <View style={styles.centeredView}>
+        <View style={styles.container}>
+          <View style={styles.iconContainer}>
+            <Icon name="notifications-off" size={48} color={colors.warning} />
+          </View>
+
+          <Text style={styles.title}>开启通知权限</Text>
+          <Text style={styles.message}>
+            为了及时提醒您的日程安排，请允许应用发送通知
+          </Text>
+
+          <TouchableOpacity style={styles.primaryButton} onPress={requestPermission}>
+            <Text style={styles.primaryButtonText}>允许通知</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.secondaryButton} onPress={openSettings}>
+            <Text style={styles.secondaryButtonText}>前往设置</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.dismissButton}
+            onPress={() => setShowPrompt(false)}>
+            <Text style={styles.dismissButtonText}>稍后再说</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
   );
 };
 
 const styles = StyleSheet.create({
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  androidBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+  },
+  centeredView: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
   container: {
     backgroundColor: colors.background,
-    padding: 24,
-    borderRadius: 12,
+    padding: 32,
+    borderRadius: 20,
     alignItems: 'center',
-    margin: 16,
+    width: '100%',
+    maxWidth: 400,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
   },
   iconContainer: {
     marginBottom: 16,

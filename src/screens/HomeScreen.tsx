@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Modal, TouchableOpacity, Text } from 'react-native';
+import { View, StyleSheet, Modal, TouchableOpacity, Text, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
@@ -10,6 +10,7 @@ import WeekView from '../components/Calendar/WeekView';
 import DayView from '../components/Calendar/DayView';
 import Button from '../components/Common/Button';
 import { EventForm, EventDetail, EventCard } from '../components/Event';
+import NotificationPermission from '../components/Permission/NotificationPermission';
 import { Event } from '../types/event';
 
 type ViewType = 'month' | 'week' | 'day';
@@ -54,13 +55,13 @@ export default function HomeScreen() {
   ) => {
     if (selectedEvent) {
       try {
-        await updateEvent(selectedEvent.id, eventData);
-        // 注意：编辑时的提醒更新需要额外处理
+        await updateEvent(selectedEvent.id, eventData, reminderMinutes);
         setShowEditModal(false);
         setShowDetailModal(false);
         setSelectedEvent(null);
       } catch (error) {
         console.error('Failed to update event:', error);
+        Alert.alert('错误', '更新日程失败');
       }
     }
   };
@@ -119,6 +120,9 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* 通知权限提示（独立 Modal） */}
+      <NotificationPermission />
+
       <View style={styles.content}>
         <View style={styles.viewSwitcher}>
           {renderButton('month', '月')}

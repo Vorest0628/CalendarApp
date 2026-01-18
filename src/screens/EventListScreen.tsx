@@ -6,6 +6,7 @@ import {
   FlatList,
   Modal,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -76,12 +77,12 @@ export default function EventListScreen() {
   ) => {
     if (selectedEvent) {
       try {
-        await updateEvent(selectedEvent.id, eventData);
-        // 注意：编辑时的提醒更新需要额外处理
+        await updateEvent(selectedEvent.id, eventData, reminderMinutes);
         setShowEditModal(false);
         setSelectedEvent(null);
       } catch (error) {
         console.error('Failed to update event:', error);
+        Alert.alert('错误', '更新日程失败');
       }
     }
   };

@@ -41,9 +41,10 @@ interface EventStore {
    * 更新日程
    * @param id - 日程 ID
    * @param updates - 要更新的字段
+   * @param reminderMinutes - 提醒时间列表（分钟）
    * @returns Promise<void>
    */
-  updateEvent: (id: string, updates: Partial<Event>) => Promise<void>;
+  updateEvent: (id: string, updates: Partial<Event>, reminderMinutes?: number[]) => Promise<void>;
 
   /**
    * 删除日程（同时删除相关提醒）
@@ -134,10 +135,34 @@ export const useEventStore = create<EventStore>((set, get) => ({
     }
   },
 
-  updateEvent: async (id: string, updates: Partial<Event>) => {
+  updateEvent: async (id: string, updates: Partial<Event>, reminderMinutes?: number[]) => {
     try {
       const dao = getEventDAO();
       await dao.updateEvent(id, updates);
+      
+      // 如果提供了提醒设置，则更新提醒
+      if (reminderMinutes !== undefined) {
+        // 先删除旧提醒
+        try {
+          await ReminderService.deleteEventReminders(id);
+        } catch (error) {
+          console.error('Failed to delete old reminders:', error);
+        }
+        
+        // 如果有新提醒，则创建
+        if (reminderMinutes.length > 0) {
+          try {
+            const currentEvent = get().events.find(e => e.id === id);
+            if (currentEvent) {
+              const updatedEvent = { ...currentEvent, ...updates };
+              await ReminderService.createReminders(updatedEvent, reminderMinutes);
+            }
+          } catch (error) {
+            console.error('Failed to create new reminders:', error);
+          }
+        }
+      }
+      
       set(state => ({
         events: state.events.map(event =>
           event.id === id ? { ...event, ...updates, updatedAt: new Date() } : event

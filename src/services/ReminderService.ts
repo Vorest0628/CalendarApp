@@ -47,9 +47,11 @@ class ReminderService {
         event.startTime.getTime() - minutesBefore * 60 * 1000
       );
 
-      // 检查触发时间是否已过
-      if (triggerTime.getTime() <= Date.now()) {
-        throw new Error('Trigger time must be in the future');
+      // 检查触发时间是否已过（给予 30 秒缓冲）
+      const now = Date.now();
+      if (triggerTime.getTime() <= now + 30000) {
+        console.warn(`Trigger time is too close or in the past, skipping reminder for event: ${event.id}`);
+        throw new Error('Trigger time must be at least 30 seconds in the future');
       }
 
       // 创建提醒对象
@@ -79,7 +81,6 @@ class ReminderService {
       // 保存到数据库
       await this.reminderDAO.addReminder(reminder);
 
-      console.log('Reminder created:', reminder.id);
       return reminder;
     } catch (error) {
       console.error('Failed to create reminder:', error);

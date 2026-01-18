@@ -68,6 +68,29 @@ export const EventForm: React.FC<EventFormProps> = ({
   const [showStartPicker, setShowStartPicker] = useState<boolean>(false);
   const [showEndPicker, setShowEndPicker] = useState<boolean>(false);
   const [pickerMode, setPickerMode] = useState<'date' | 'time'>('date');
+  const [showStartTimePicker, setShowStartTimePicker] = useState<boolean>(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState<boolean>(false);
+
+  // 在编辑模式下，加载现有的提醒设置
+  useEffect(() => {
+    if (initialEvent) {
+      const loadReminders = async () => {
+        try {
+          const reminders = await ReminderService.getEventReminders(initialEvent.id);
+          if (reminders.length > 0) {
+            const minutes = reminders.map(reminder => {
+              const diff = initialEvent.startTime.getTime() - reminder.triggerTime.getTime();
+              return Math.floor(diff / 60000);
+            });
+            setReminderMinutes(minutes);
+          }
+        } catch (error) {
+          console.error('Failed to load reminders:', error);
+        }
+      };
+      loadReminders();
+    }
+  }, [initialEvent]);
 
   // 当切换全天事件时，调整时间
   useEffect(() => {
@@ -92,6 +115,32 @@ export const EventForm: React.FC<EventFormProps> = ({
     if (startTime >= endTime) {
       Alert.alert('提示', '结束时间必须晚于开始时间');
       return;
+    }
+
+    // 验证提醒时间（如果设置了提醒）
+    if (reminderMinutes.length > 0) {
+      const now = Date.now();
+      const minReminderTime = 2 * 60 * 1000; // 2分钟
+      
+      // 检查每个提醒的触发时间
+      for (const minutes of reminderMinutes) {
+        const triggerTime = startTime.getTime() - minutes * 60 * 1000;
+        const timeUntilTrigger = triggerTime - now;
+        
+        if (timeUntilTrigger < minReminderTime) {
+          const minutesUntilStart = Math.floor((startTime.getTime() - now) / 60000);
+          Alert.alert(
+            '提醒时间过近',
+            `提醒时间必须至少在当前时间的2分钟后。\n\n` +
+            `当前选择：提前${minutes}分钟提醒\n` +
+            `日程开始：${minutesUntilStart}分钟后\n\n` +
+            `建议：\n` +
+            `- 将日程时间设置得更晚一些\n` +
+            `- 或减少提醒的提前时间`
+          );
+          return;
+        }
+      }
     }
 
     const eventData: Omit<Event, 'id' | 'createdAt' | 'updatedAt'> = {
@@ -120,7 +169,10 @@ export const EventForm: React.FC<EventFormProps> = ({
         newStart.setHours(startTime.getHours(), startTime.getMinutes());
         setStartTime(newStart);
 
-        if (Platform.OS === 'ios') {
+        if (Platform.OS === 'android') {
+          // Android 上接着显示时间选择器
+          setShowStartTimePicker(true);
+        } else if (Platform.OS === 'ios') {
           // iOS 上继续显示时间选择器
           setPickerMode('time');
         }
@@ -131,6 +183,13 @@ export const EventForm: React.FC<EventFormProps> = ({
           setShowStartPicker(false);
         }
       }
+    }
+  };
+
+  const handleStartTimeChange = (event: any, selectedTime?: Date) => {
+    setShowStartTimePicker(false);
+    if (selectedTime) {
+      setStartTime(selectedTime);
     }
   };
 
@@ -145,7 +204,10 @@ export const EventForm: React.FC<EventFormProps> = ({
         newEnd.setHours(endTime.getHours(), endTime.getMinutes());
         setEndTime(newEnd);
 
-        if (Platform.OS === 'ios') {
+        if (Platform.OS === 'android') {
+          // Android 上接着显示时间选择器
+          setShowEndTimePicker(true);
+        } else if (Platform.OS === 'ios') {
           setPickerMode('time');
         }
       } else {
@@ -154,6 +216,13 @@ export const EventForm: React.FC<EventFormProps> = ({
           setShowEndPicker(false);
         }
       }
+    }
+  };
+
+  const handleEndTimeChange = (event: any, selectedTime?: Date) => {
+    setShowEndTimePicker(false);
+    if (selectedTime) {
+      setEndTime(selectedTime);
     }
   };
 
@@ -309,6 +378,25 @@ export const EventForm: React.FC<EventFormProps> = ({
           mode={pickerMode}
           display="default"
           onChange={handleEndDateChange}
+        />
+      )}
+
+      {/* Android 时间选择器 */}
+      {showStartTimePicker && Platform.OS === 'android' && (
+        <DateTimePicker
+          value={startTime}
+          mode="time"
+          display="default"
+          onChange={handleStartTimeChange}
+        />
+      )}
+
+      {showEndTimePicker && Platform.OS === 'android' && (
+        <DateTimePicker
+          value={endTime}
+          mode="time"
+          display="default"
+          onChange={handleEndTimeChange}
         />
       )}
     </ScrollView>
