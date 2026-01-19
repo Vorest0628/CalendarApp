@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   TouchableOpacity,
   Text,
@@ -7,7 +7,7 @@ import {
   ViewStyle,
   TextStyle,
 } from 'react-native';
-import { theme } from '../../theme';
+import { useAppTheme } from '../../theme/useAppTheme';
 
 interface ButtonProps {
   title?: string;
@@ -34,6 +34,9 @@ export default function Button({
   icon,
   children,
 }: ButtonProps) {
+  const theme = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
   const buttonStyle = [
     styles.base,
     styles[variant],
@@ -89,63 +92,64 @@ export default function Button({
   );
 }
 
-const styles = StyleSheet.create({
-  base: {
-    borderRadius: theme.borderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primary: {
-    backgroundColor: theme.colors.primary,
-  },
-  secondary: {
-    backgroundColor: theme.colors.secondary,
-  },
-  outline: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: theme.colors.primary,
-  },
-  text: {
-    backgroundColor: 'transparent',
-  },
-  disabled: {
-    opacity: 0.5,
-  },
-  size_small: {
-    paddingVertical: theme.spacing.xs,
-    paddingHorizontal: theme.spacing.md,
-  },
-  size_medium: {
-    paddingVertical: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.lg,
-  },
-  size_large: {
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.xl,
-  },
-  textContent: {
-    fontWeight: '600',
-  },
-  text_primary: {
-    color: '#FFFFFF',
-  },
-  text_secondary: {
-    color: '#FFFFFF',
-  },
-  text_outline: {
-    color: theme.colors.primary,
-  },
-  text_text: {
-    color: theme.colors.text,
-  },
-  textSize_small: {
-    fontSize: theme.fontSize.sm,
-  },
-  textSize_medium: {
-    fontSize: theme.fontSize.md,
-  },
-  textSize_large: {
-    fontSize: theme.fontSize.lg,
-  },
-});
+const createStyles = (theme: ReturnType<typeof useAppTheme>) =>
+  StyleSheet.create({
+    base: {
+      borderRadius: theme.borderRadius.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    primary: {
+      backgroundColor: theme.colors.primary,
+    },
+    secondary: {
+      backgroundColor: theme.colors.secondary,
+    },
+    outline: {
+      backgroundColor: 'transparent',
+      borderWidth: 1,
+      borderColor: theme.colors.primary,
+    },
+    text: {
+      backgroundColor: 'transparent',
+    },
+    disabled: {
+      opacity: 0.5,
+    },
+    size_small: {
+      paddingVertical: theme.spacing.xs,
+      paddingHorizontal: theme.spacing.md,
+    },
+    size_medium: {
+      paddingVertical: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.lg,
+    },
+    size_large: {
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.xl,
+    },
+    textContent: {
+      fontWeight: '600',
+    },
+    text_primary: {
+      color: '#FFFFFF',
+    },
+    text_secondary: {
+      color: '#FFFFFF',
+    },
+    text_outline: {
+      color: theme.colors.primary,
+    },
+    text_text: {
+      color: theme.colors.text,
+    },
+    textSize_small: {
+      fontSize: theme.fontSize.sm,
+    },
+    textSize_medium: {
+      fontSize: theme.fontSize.md,
+    },
+    textSize_large: {
+      fontSize: theme.fontSize.lg,
+    },
+  });

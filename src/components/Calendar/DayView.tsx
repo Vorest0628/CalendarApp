@@ -1,7 +1,7 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, Animated, PanResponder, Dimensions } from 'react-native';
 import dayjs from 'dayjs';
-import { theme } from '../../theme';
+import { useAppTheme } from '../../theme/useAppTheme';
 import { useEventStore } from '../../store/eventStore';
 import { getDayLazyLoadData } from '../../utils/lazyLoadUtils';
 
@@ -9,6 +9,9 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
 
 export default function DayView() {
+  const theme = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
   const { selectedDate, setSelectedDate, getEventsForDate } = useEventStore();
   const translateX = useRef(new Animated.Value(0)).current;
   const isAnimatingRef = useRef(false); // 标记是否正在动画中
@@ -174,75 +177,76 @@ export default function DayView() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-    overflow: 'hidden',
-  },
-  headerContainer: {
-    flexDirection: 'row',
-  },
-  dayWrapper: {
-    width: SCREEN_WIDTH,
-  },
-  header: {
-    padding: theme.spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-    alignItems: 'center',
-  },
-  dateText: {
-    fontSize: theme.fontSize.xl,
-    fontWeight: 'bold',
-    color: theme.colors.text,
-  },
-  weekDayText: {
-    fontSize: theme.fontSize.md,
-    color: theme.colors.textSecondary,
-    marginTop: 4,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  hourRow: {
-    flexDirection: 'row',
-    height: 80,
-  },
-  hourLabelContainer: {
-    width: 60,
-    alignItems: 'center',
-    paddingTop: 4,
-  },
-  hourLabel: {
-    fontSize: theme.fontSize.xs,
-    color: theme.colors.textSecondary,
-  },
-  hourContent: {
-    flex: 1,
-    position: 'relative',
-  },
-  hourLine: {
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-  },
-  eventBlock: {
-    position: 'absolute',
-    left: 0,
-    right: theme.spacing.md,
-    top: 8,
-    borderRadius: theme.borderRadius.md,
-    padding: theme.spacing.sm,
-    opacity: 0.9,
-  },
-  eventTitle: {
-    fontSize: theme.fontSize.sm,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  eventTime: {
-    fontSize: theme.fontSize.xs,
-    color: '#FFFFFF',
-    marginTop: 2,
-  },
-});
+const createStyles = (theme: ReturnType<typeof useAppTheme>) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+      overflow: 'hidden',
+    },
+    headerContainer: {
+      flexDirection: 'row',
+    },
+    dayWrapper: {
+      width: SCREEN_WIDTH,
+    },
+    header: {
+      padding: theme.spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+      alignItems: 'center',
+    },
+    dateText: {
+      fontSize: theme.fontSize.xl,
+      fontWeight: 'bold',
+      color: theme.colors.text,
+    },
+    weekDayText: {
+      fontSize: theme.fontSize.md,
+      color: theme.colors.textSecondary,
+      marginTop: 4,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    hourRow: {
+      flexDirection: 'row',
+      height: 80,
+    },
+    hourLabelContainer: {
+      width: 60,
+      alignItems: 'center',
+      paddingTop: 4,
+    },
+    hourLabel: {
+      fontSize: theme.fontSize.xs,
+      color: theme.colors.textSecondary,
+    },
+    hourContent: {
+      flex: 1,
+      position: 'relative',
+    },
+    hourLine: {
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border,
+    },
+    eventBlock: {
+      position: 'absolute',
+      left: 0,
+      right: theme.spacing.md,
+      top: 8,
+      borderRadius: theme.borderRadius.md,
+      padding: theme.spacing.sm,
+      opacity: 0.9,
+    },
+    eventTitle: {
+      fontSize: theme.fontSize.sm,
+      fontWeight: 'bold',
+      color: '#FFFFFF',
+    },
+    eventTime: {
+      fontSize: theme.fontSize.xs,
+      color: '#FFFFFF',
+      marginTop: 2,
+    },
+  });

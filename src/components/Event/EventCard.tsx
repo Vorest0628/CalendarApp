@@ -1,7 +1,7 @@
 /**
  * 日程卡片组件（用于列表展示）
  */
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Event } from '../../types/event';
-import { colors } from '../../theme/colors';
+import { useAppTheme, AppColors } from '../../theme/useAppTheme';
 
 interface EventCardProps {
   event: Event; // 日程数据
@@ -23,6 +23,9 @@ export const EventCard: React.FC<EventCardProps> = ({
   onPress,
   showDate = false,
 }) => {
+  const theme = useAppTheme();
+  const colors = theme.colors;
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const formatTime = (date: Date): string => {
     const hours = String(date.getHours()).padStart(2, '0');
     const minutes = String(date.getMinutes()).padStart(2, '0');
@@ -97,79 +100,80 @@ export const EventCard: React.FC<EventCardProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    backgroundColor: colors.surface,
-    borderRadius: 8,
-    marginHorizontal: 16,
-    marginVertical: 6,
-    flexDirection: 'row',
-    overflow: 'hidden',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-  },
-  colorBar: {
-    width: 4,
-  },
-  content: {
-    flex: 1,
-    padding: 12,
-  },
-  date: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginBottom: 4,
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 6,
-  },
-  timeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 4,
-  },
-  time: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 4,
-  },
-  location: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    flex: 1,
-  },
-  description: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginTop: 4,
-    lineHeight: 20,
-  },
-  repeatBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    alignSelf: 'flex-start',
-    marginTop: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    backgroundColor: colors.primary + '20',
-    borderRadius: 12,
-  },
-  repeatText: {
-    fontSize: 11,
-    color: colors.primary,
-    fontWeight: '500',
-  },
-});
+const createStyles = (colors: AppColors) =>
+  StyleSheet.create({
+    container: {
+      backgroundColor: colors.surface,
+      borderRadius: 8,
+      marginHorizontal: 16,
+      marginVertical: 6,
+      flexDirection: 'row',
+      overflow: 'hidden',
+      elevation: 2,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.2,
+      shadowRadius: 2,
+    },
+    colorBar: {
+      width: 4,
+    },
+    content: {
+      flex: 1,
+      padding: 12,
+    },
+    date: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      marginBottom: 4,
+    },
+    title: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.text,
+      marginBottom: 6,
+    },
+    timeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      marginBottom: 4,
+    },
+    time: {
+      fontSize: 14,
+      color: colors.textSecondary,
+    },
+    locationRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      marginBottom: 4,
+    },
+    location: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      flex: 1,
+    },
+    description: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      marginTop: 4,
+      lineHeight: 20,
+    },
+    repeatBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      alignSelf: 'flex-start',
+      marginTop: 6,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      backgroundColor: colors.primary + '20',
+      borderRadius: 12,
+    },
+    repeatText: {
+      fontSize: 11,
+      color: colors.primary,
+      fontWeight: '500',
+    },
+  });

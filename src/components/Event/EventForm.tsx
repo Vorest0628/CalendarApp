@@ -1,7 +1,7 @@
 /**
  * 日程添加/编辑表单组件
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -15,9 +15,10 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Event } from '../../types/event';
-import { colors } from '../../theme/colors';
+import { useAppTheme, AppColors } from '../../theme/useAppTheme';
 import ReminderPicker from './ReminderPicker';
 import ReminderService from '../../services/ReminderService';
+import { useSettingsStore } from '../../store/settingsStore';
 
 // 预设颜色选项
 const COLOR_OPTIONS = [
@@ -45,6 +46,10 @@ export const EventForm: React.FC<EventFormProps> = ({
   onSubmit,
   onCancel,
 }) => {
+  const theme = useAppTheme();
+  const colors = theme.colors;
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [title, setTitle] = useState<string>(initialEvent?.title || '');
   const [description, setDescription] = useState<string>(
     initialEvent?.description || ''
@@ -64,7 +69,21 @@ export const EventForm: React.FC<EventFormProps> = ({
   const [color, setColor] = useState<string>(
     initialEvent?.color || COLOR_OPTIONS[0]
   );
-  const [reminderMinutes, setReminderMinutes] = useState<number[]>([]);
+  const defaultReminderMinutesSetting = useSettingsStore(
+    state => state.settings.defaultReminderMinutes
+  );
+  const [reminderMinutes, setReminderMinutes] = useState<number[]>(() => {
+    if (initialEvent) {
+      return [];
+    }
+    if (
+      defaultReminderMinutesSetting &&
+      defaultReminderMinutesSetting.length > 0
+    ) {
+      return [...defaultReminderMinutesSetting];
+    }
+    return [];
+  });
   const [showStartPicker, setShowStartPicker] = useState<boolean>(false);
   const [showEndPicker, setShowEndPicker] = useState<boolean>(false);
   const [pickerMode, setPickerMode] = useState<'date' | 'time'>('date');
@@ -403,95 +422,96 @@ export const EventForm: React.FC<EventFormProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  form: {
-    padding: 16,
-  },
-  formGroup: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: colors.surface,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    color: colors.text,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  textArea: {
-    minHeight: 100,
-    paddingTop: 12,
-  },
-  dateButton: {
-    backgroundColor: colors.surface,
-    borderRadius: 8,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  dateText: {
-    fontSize: 16,
-    color: colors.text,
-  },
-  switchRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  colorGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  colorOption: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  colorOptionSelected: {
-    borderColor: colors.text,
-    borderWidth: 3,
-  },
-  buttonGroup: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 20,
-  },
-  button: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  cancelButton: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  submitButton: {
-    backgroundColor: colors.primary,
-  },
-  submitButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-});
+const createStyles = (colors: AppColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    form: {
+      padding: 16,
+    },
+    formGroup: {
+      marginBottom: 20,
+    },
+    label: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.text,
+      marginBottom: 8,
+    },
+    input: {
+      backgroundColor: colors.surface,
+      borderRadius: 8,
+      padding: 12,
+      fontSize: 16,
+      color: colors.text,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    textArea: {
+      minHeight: 100,
+      paddingTop: 12,
+    },
+    dateButton: {
+      backgroundColor: colors.surface,
+      borderRadius: 8,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    dateText: {
+      fontSize: 16,
+      color: colors.text,
+    },
+    switchRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    colorGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 12,
+    },
+    colorOption: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      borderWidth: 2,
+      borderColor: 'transparent',
+    },
+    colorOptionSelected: {
+      borderColor: colors.text,
+      borderWidth: 3,
+    },
+    buttonGroup: {
+      flexDirection: 'row',
+      gap: 12,
+      marginTop: 20,
+    },
+    button: {
+      flex: 1,
+      padding: 16,
+      borderRadius: 8,
+      alignItems: 'center',
+    },
+    cancelButton: {
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    cancelButtonText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    submitButton: {
+      backgroundColor: colors.primary,
+    },
+    submitButtonText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: '#FFFFFF',
+    },
+  });

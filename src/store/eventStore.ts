@@ -71,6 +71,11 @@ interface EventStore {
    * @returns Event[] - 该日期的所有日程
    */
   getEventsForDate: (date: Date) => Event[];
+
+  /**
+   * 清空所有日程（仅清除内存状态，配合重置应用使用）
+   */
+  clearEvents: () => void;
 }
 
 export const useEventStore = create<EventStore>((set, get) => ({
@@ -210,5 +215,9 @@ export const useEventStore = create<EventStore>((set, get) => ({
         eventDate.getDate() === date.getDate()
       );
     });
+  },
+
+  clearEvents: () => {
+    set({ events: [], selectedDate: new Date() });
   },
 }));

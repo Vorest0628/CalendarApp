@@ -10,6 +10,7 @@ import notifee, {
   TriggerType,
 } from '@notifee/react-native';
 import { Platform } from 'react-native';
+import { useSettingsStore } from '../store/settingsStore';
 
 class NotificationService {
   private static instance: NotificationService;
@@ -89,6 +90,46 @@ class NotificationService {
       console.error('Failed to check notification permission:', error);
       return false;
     }
+  }
+
+  /**
+   * 根据应用设置判断是否允许发送通知
+   * @returns Promise<boolean> - 是否允许发送
+   */
+  private async canSendNotification(): Promise<boolean> {
+    try {
+      const { settings } = useSettingsStore.getState();
+
+      if (!settings.notificationsEnabled) {
+        console.log('Notifications are disabled in app settings');
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Failed to read notification settings:', error);
+      // 设置读取失败时，默认允许发送，以避免遗漏重要提醒
+      return true;
+    }
+  }
+
+  /**
+   * 调度定时通知（受应用设置控制）
+   * - 若用户关闭通知总开关，则不调度通知
+   */
+  async scheduleNotificationWithSettings(
+    id: string,
+    title: string,
+    body: string,
+    triggerTime: Date,
+    data?: any
+  ): Promise<string> {
+    const canSend = await this.canSendNotification();
+    if (!canSend) {
+      return '';
+    }
+
+    return this.scheduleNotification(id, title, body, triggerTime, data);
   }
 
   /**

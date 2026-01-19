@@ -207,6 +207,27 @@ class DatabaseService {
       console.log('Database closed');
     }
   }
+
+  /**
+   * 清空所有数据（日程、提醒、日历）
+   * 保留表结构，仅删除数据
+   */
+  async clearAllData(): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      // 按顺序删除，先删除有外键依赖的表
+      await this.db.executeSql('DELETE FROM reminders');
+      await this.db.executeSql('DELETE FROM events');
+      // 删除非默认日历，保留默认日历
+      await this.db.executeSql('DELETE FROM calendars WHERE id != ?', ['default']);
+
+      console.log('All data cleared successfully');
+    } catch (error) {
+      console.error('Failed to clear all data:', error);
+      throw error;
+    }
+  }
 }
 
 export default DatabaseService.getInstance();

@@ -65,17 +65,20 @@ class ReminderService {
 
       // 调度系统通知
       if (method === ReminderMethod.NOTIFICATION) {
-        const notificationId = await NotificationService.scheduleNotification(
-          reminder.id,
-          event.title,
-          this.formatNotificationBody(event, minutesBefore),
-          triggerTime,
-          {
-            eventId: event.id,
-            reminderId: reminder.id,
-          }
-        );
-        reminder.notificationId = notificationId;
+        const notificationId =
+          await NotificationService.scheduleNotificationWithSettings(
+            reminder.id,
+            event.title,
+            this.formatNotificationBody(event, minutesBefore),
+            triggerTime,
+            {
+              eventId: event.id,
+              reminderId: reminder.id,
+            }
+          );
+        if (notificationId) {
+          reminder.notificationId = notificationId;
+        }
       }
 
       // 保存到数据库

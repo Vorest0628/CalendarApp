@@ -1,7 +1,11 @@
 import { colors } from './colors';
+import { AppTheme } from '../types/settings';
 
-export const theme = {
-  colors,
+// 重新导出 useAppTheme hook
+export { useAppTheme, useAppColors } from './useAppTheme';
+export type { AppThemeType, AppColors } from './useAppTheme';
+
+const baseTheme = {
   spacing: {
     xs: 4,
     sm: 8,
@@ -25,4 +29,50 @@ export const theme = {
   },
 };
 
+export const theme = {
+  ...baseTheme,
+  colors,
+};
+
 export type Theme = typeof theme;
+
+export const createAppTheme = (appTheme: AppTheme): Theme => {
+  const isDark = appTheme === AppTheme.DARK;
+
+  const themeColors = isDark
+    ? {
+        ...colors,
+        // 主色调
+        primary: '#BB86FC',
+        primaryLight: '#EFBBFF',
+        primaryDark: '#7B52C9',
+        // 辅助色
+        secondary: '#03DAC6',
+        secondaryLight: '#66FFF9',
+        secondaryDark: '#00A896',
+        // 背景色
+        background: '#121212',
+        surface: '#1E1E1E',
+        // 文字颜色
+        text: '#FFFFFF',
+        textSecondary: '#B3B3B3',
+        textDisabled: '#666666',
+        // 状态颜色
+        error: '#CF6679',
+        success: '#4CAF50',
+        warning: '#FFB74D',
+        info: '#64B5F6',
+        // 边框
+        border: '#333333',
+        // 日历相关颜色
+        today: '#FF6B6B',
+        selected: '#BB86FC',
+        disabled: '#444444',
+      }
+    : colors;
+
+  return {
+    ...baseTheme,
+    colors: themeColors,
+  };
+};

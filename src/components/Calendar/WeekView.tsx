@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, PanResponder, Dimensions } from 'react-native';
 import dayjs from 'dayjs';
-import { theme } from '../../theme';
+import { useAppTheme } from '../../theme/useAppTheme';
 import { useEventStore } from '../../store/eventStore';
+import { useSettingsStore } from '../../store/settingsStore';
+import { WeekStart } from '../../types/settings';
 import { isToday, isSameDay } from '../../utils/dateUtils';
 import { Event } from '../../types/event';
 import { getWeekLazyLoadData } from '../../utils/lazyLoadUtils';
@@ -12,8 +14,22 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
 
 export default function WeekView() {
-  const [currentWeekStart, setCurrentWeekStart] = useState(dayjs().startOf('week').toDate());
+  const theme = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
   const { selectedDate, setSelectedDate, getEventsForDate, loadEvents, events } = useEventStore();
+  const weekStartSetting = useSettingsStore(state => state.settings.weekStart);
+
+  const [currentWeekStart, setCurrentWeekStart] = useState(() => {
+    const d = dayjs();
+    const day = d.day(); // 0-6 (Sun-Sat)
+    if (weekStartSetting === WeekStart.MONDAY) {
+      const offset = (day + 6) % 7;
+      return d.subtract(offset, 'day').startOf('day').toDate();
+    }
+    const offset = day;
+    return d.subtract(offset, 'day').startOf('day').toDate();
+  });
   const translateX = useRef(new Animated.Value(0)).current;
   const isAnimatingRef = useRef(false); // 标记是否正在动画中
 
@@ -41,15 +57,40 @@ export default function WeekView() {
     }
   }, [lazyLoadData]);
 
-  // 监听 currentWeekKey 变化，手动更新懒加载数据
+  // 监听 currentWeekKey 或 weekStartSetting 变化，手动更新懒加载数据
   useEffect(() => {
-    console.log('useEffect triggered! Updating week lazy load data for:', currentWeekStart);
+    console.log('useEffect triggered! Updating week lazy load data for:', currentWeekStart, 'weekStart:', weekStartSetting);
     const newData = getWeekLazyLoadData(currentWeekStart);
     setLazyLoadData(newData);
-  }, [currentWeekKey]);
+  }, [currentWeekKey, weekStartSetting]);
 
+  // 监听 weekStartSetting 变化，调整当前的 currentWeekStart
+  useEffect(() => {
+    const d = dayjs(currentWeekStart);
+    const day = d.day();
+    let newStart;
+    if (weekStartSetting === WeekStart.MONDAY) {
+      // 转换到周一
+      const offset = (day + 6) % 7;
+      newStart = d.subtract(offset, 'day').startOf('day');
+    } else {
+      // 转换到周日
+      const offset = day;
+      newStart = d.subtract(offset, 'day').startOf('day');
+    }
+    
+    if (!newStart.isSame(dayjs(currentWeekStart), 'day')) {
+      setCurrentWeekStart(newStart.toDate());
+    }
+  }, [weekStartSetting]);
   const { prev: prevWeekData, current: currentWeekData, next: nextWeekData } = lazyLoadData;
   const weekDays = currentWeekData.weekDays;
+
+  const weekDayLabels = useMemo(() => {
+    return weekStartSetting === WeekStart.MONDAY
+      ? ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+      : ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+  }, [weekStartSetting]);
   const hours = Array.from({ length: 24 }, (_, i) => i);
 
   // 加载当前周及相邻周的事件（一次性加载，避免多次状态更新导致闪烁）
@@ -160,7 +201,7 @@ export default function WeekView() {
             style={[styles.dateCell, isSelected && styles.selectedDateCell]}
             onPress={() => handleDatePress(date)}>
             <Text style={[styles.weekDayText, isSelected && styles.selectedText]}>
-              {dayjs(date).format('ddd')}
+              {weekDayLabels[index]}
             </Text>
             <Text
               style={[
@@ -262,112 +303,113 @@ export default function WeekView() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-    overflow: 'hidden',
-  },
-  dateRowContainer: {
-    flexDirection: 'row',
-  },
-  weekWrapper: {
-    width: SCREEN_WIDTH,
-  },
-  dateRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-    paddingVertical: theme.spacing.sm,
-  },
-  dateCell: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: theme.spacing.sm,
-    borderRadius: theme.borderRadius.md,
-  },
-  selectedDateCell: {
-    backgroundColor: theme.colors.primary,
-  },
-  weekDayText: {
-    fontSize: theme.fontSize.xs,
-    color: theme.colors.textSecondary,
-    marginBottom: 4,
-  },
-  dayNumberText: {
-    fontSize: theme.fontSize.lg,
-    fontWeight: 'bold',
-    color: theme.colors.text,
-  },
-  selectedText: {
-    color: '#FFFFFF',
-  },
-  todayText: {
-    color: theme.colors.today,
-  },
-  eventIndicatorWrapper: {
-    height: 10, // 固定高度，始终预留红点空间
-    marginTop: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  eventIndicator: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: theme.colors.error,
-  },
-  timelineContainer: {
-    flex: 1,
-  },
-  timelineContent: {
-    flexDirection: 'row',
-    minHeight: 24 * 60, // 24小时 * 60像素
-  },
-  timeLabels: {
-    width: 50,
-  },
-  hourRow: {
-    height: 60,
-    justifyContent: 'flex-start',
-    paddingTop: 4,
-  },
-  hourLabel: {
-    fontSize: theme.fontSize.xs,
-    color: theme.colors.textSecondary,
-  },
-  daysContainer: {
-    flex: 1,
-    flexDirection: 'row',
-  },
-  dayColumn: {
-    flex: 1,
-    position: 'relative',
-    borderLeftWidth: 1,
-    borderLeftColor: theme.colors.border,
-  },
-  hourLine: {
-    height: 60,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-  },
-  eventCard: {
-    position: 'absolute',
-    left: 2,
-    right: 2,
-    borderRadius: 4,
-    padding: 4,
-    overflow: 'hidden',
-  },
-  eventTitle: {
-    color: '#FFFFFF',
-    fontSize: theme.fontSize.xs,
-    fontWeight: '600',
-  },
-  eventTime: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    marginTop: 2,
-    opacity: 0.9,
-  },
-});
+const createStyles = (theme: ReturnType<typeof useAppTheme>) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+      overflow: 'hidden',
+    },
+    dateRowContainer: {
+      flexDirection: 'row',
+    },
+    weekWrapper: {
+      width: SCREEN_WIDTH,
+    },
+    dateRow: {
+      flexDirection: 'row',
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+      paddingVertical: theme.spacing.sm,
+    },
+    dateCell: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: theme.spacing.sm,
+      borderRadius: theme.borderRadius.md,
+    },
+    selectedDateCell: {
+      backgroundColor: theme.colors.primary,
+    },
+    weekDayText: {
+      fontSize: theme.fontSize.xs,
+      color: theme.colors.textSecondary,
+      marginBottom: 4,
+    },
+    dayNumberText: {
+      fontSize: theme.fontSize.lg,
+      fontWeight: 'bold',
+      color: theme.colors.text,
+    },
+    selectedText: {
+      color: '#FFFFFF',
+    },
+    todayText: {
+      color: theme.colors.today,
+    },
+    eventIndicatorWrapper: {
+      height: 10, // 固定高度，始终预留红点空间
+      marginTop: 4,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    eventIndicator: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: theme.colors.error,
+    },
+    timelineContainer: {
+      flex: 1,
+    },
+    timelineContent: {
+      flexDirection: 'row',
+      minHeight: 24 * 60, // 24小时 * 60像素
+    },
+    timeLabels: {
+      width: 50,
+    },
+    hourRow: {
+      height: 60,
+      justifyContent: 'flex-start',
+      paddingTop: 4,
+    },
+    hourLabel: {
+      fontSize: theme.fontSize.xs,
+      color: theme.colors.textSecondary,
+    },
+    daysContainer: {
+      flex: 1,
+      flexDirection: 'row',
+    },
+    dayColumn: {
+      flex: 1,
+      position: 'relative',
+      borderLeftWidth: 1,
+      borderLeftColor: theme.colors.border,
+    },
+    hourLine: {
+      height: 60,
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border,
+    },
+    eventCard: {
+      position: 'absolute',
+      left: 2,
+      right: 2,
+      borderRadius: 4,
+      padding: 4,
+      overflow: 'hidden',
+    },
+    eventTitle: {
+      color: '#FFFFFF',
+      fontSize: theme.fontSize.xs,
+      fontWeight: '600',
+    },
+    eventTime: {
+      color: '#FFFFFF',
+      fontSize: 10,
+      marginTop: 2,
+      opacity: 0.9,
+    },
+  });

@@ -2,7 +2,7 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text } from 'react-native';
+import { Text, StyleSheet } from 'react-native';
 
 // 导入页面组件
 import HomeScreen from '../screens/HomeScreen';
@@ -11,7 +11,7 @@ import SettingsScreen from '../screens/SettingsScreen';
 
 // 导入类型定义
 import { RootStackParamList } from '../types/navigation';
-import { theme } from '../theme';
+import { useAppTheme } from '../theme/useAppTheme';
 
 const Stack = createStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator();
@@ -20,11 +20,17 @@ const Tab = createBottomTabNavigator();
  * 底部导航栏
  */
 function TabNavigator() {
+  const theme = useAppTheme();
+
   return (
     <Tab.Navigator
       screenOptions={{
         tabBarActiveTintColor: theme.colors.primary,
         tabBarInactiveTintColor: theme.colors.textSecondary,
+        tabBarStyle: {
+          backgroundColor: theme.colors.background,
+          borderTopColor: theme.colors.border,
+        },
         headerShown: false,
       }}>
       <Tab.Screen

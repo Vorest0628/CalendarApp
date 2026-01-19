@@ -1,20 +1,26 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, PanResponder, Dimensions } from 'react-native';
-import { theme } from '../../theme';
+import { useAppTheme } from '../../theme/useAppTheme';
 import {
   isToday,
   isSameDay,
   getYearMonthString,
 } from '../../utils/dateUtils';
 import { useEventStore } from '../../store/eventStore';
+import { useSettingsStore } from '../../store/settingsStore';
+import { WeekStart } from '../../types/settings';
 import { getMonthLazyLoadData, MonthData } from '../../utils/lazyLoadUtils';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25; // 滑动阈值
 
 export default function MonthView() {
+  const theme = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
   const [currentDate, setCurrentDate] = useState(new Date());
   const { selectedDate, setSelectedDate, getEventsForDate } = useEventStore();
+  const weekStart = useSettingsStore(state => state.settings.weekStart);
   
   const translateX = useRef(new Animated.Value(0)).current;
   const isAnimatingRef = useRef(false); // 标记是否正在动画中
@@ -26,8 +32,8 @@ export default function MonthView() {
   const [lazyLoadData, setLazyLoadData] = useState(() => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth() + 1;
-    console.log('Initial lazy load data for:', year, month);
-    return getMonthLazyLoadData(year, month);
+    console.log('Initial lazy load data for:', year, month, 'with weekStart:', weekStart);
+    return getMonthLazyLoadData(year, month, weekStart);
   });
   
   // 使用 ref 保存最新的懒加载数据，避免闭包问题
@@ -45,15 +51,15 @@ export default function MonthView() {
     }
   }, [lazyLoadData]);
 
-  // 监听 currentDateKey 变化，手动更新懒加载数据
+  // 监听 currentDateKey 或 weekStart 变化，手动更新懒加载数据
   useEffect(() => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth() + 1;
-    console.log('useEffect triggered! Updating lazy load data for:', year, month);
-    const newData = getMonthLazyLoadData(year, month);
+    console.log('useEffect triggered! Updating lazy load data for:', year, month, 'weekStart:', weekStart);
+    const newData = getMonthLazyLoadData(year, month, weekStart);
     console.log('New data calculated:', newData);
     setLazyLoadData(newData);
-  }, [currentDateKey]); // 使用时间戳作为依赖项
+  }, [currentDateKey, weekStart]); // 依赖项包含 weekStart
 
   // 直接从 lazyLoadData 解构，确保使用最新数据
   const { prev: prevMonthData, current: currentMonthData, next: nextMonthData } = lazyLoadData;
@@ -171,7 +177,10 @@ export default function MonthView() {
       </View>
 
       <View style={styles.weekRow}>
-        {['日', '一', '二', '三', '四', '五', '六'].map((day, index) => (
+        {(weekStart === WeekStart.MONDAY
+          ? ['一', '二', '三', '四', '五', '六', '日']
+          : ['日', '一', '二', '三', '四', '五', '六']
+        ).map((day, index) => (
           <View key={index} style={styles.weekCell}>
             <Text style={styles.weekText}>{day}</Text>
           </View>
@@ -202,89 +211,90 @@ export default function MonthView() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    backgroundColor: theme.colors.background,
-    overflow: 'hidden',
-  },
-  header: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.md,
-  },
-  headerTitle: {
-    fontSize: theme.fontSize.lg,
-    fontWeight: 'bold',
-    color: theme.colors.text,
-  },
-  swipeContainer: {
-    flexDirection: 'row',
-  },
-  monthWrapper: {
-    width: SCREEN_WIDTH,
-  },
-  monthGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  weekRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-    paddingBottom: theme.spacing.sm,
-  },
-  weekCell: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  weekText: {
-    fontSize: theme.fontSize.sm,
-    color: theme.colors.textSecondary,
-    fontWeight: '600',
-  },
-  dayCell: {
-    width: '14.28%',
-    aspectRatio: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: theme.spacing.xs,
-  },
-  selectedDayCell: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: theme.borderRadius.full,
-  },
-  todayCell: {
-    borderWidth: 2,
-    borderColor: theme.colors.today,
-    borderRadius: theme.borderRadius.full,
-  },
-  dayText: {
-    fontSize: theme.fontSize.md,
-    color: theme.colors.text,
-  },
-  selectedDayText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-  },
-  todayText: {
-    color: theme.colors.today,
-    fontWeight: 'bold',
-  },
-  eventDot: {
-    position: 'absolute',
-    top: 4,
-    left: 4,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: theme.colors.error,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  eventCount: {
-    fontSize: 10,
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-  },
-});
+const createStyles = (theme: ReturnType<typeof useAppTheme>) =>
+  StyleSheet.create({
+    container: {
+      backgroundColor: theme.colors.background,
+      overflow: 'hidden',
+    },
+    header: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.md,
+    },
+    headerTitle: {
+      fontSize: theme.fontSize.lg,
+      fontWeight: 'bold',
+      color: theme.colors.text,
+    },
+    swipeContainer: {
+      flexDirection: 'row',
+    },
+    monthWrapper: {
+      width: SCREEN_WIDTH,
+    },
+    monthGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+    },
+    weekRow: {
+      flexDirection: 'row',
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+      paddingBottom: theme.spacing.sm,
+    },
+    weekCell: {
+      flex: 1,
+      alignItems: 'center',
+    },
+    weekText: {
+      fontSize: theme.fontSize.sm,
+      color: theme.colors.textSecondary,
+      fontWeight: '600',
+    },
+    dayCell: {
+      width: '14.28%',
+      aspectRatio: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: theme.spacing.xs,
+    },
+    selectedDayCell: {
+      backgroundColor: theme.colors.primary,
+      borderRadius: theme.borderRadius.full,
+    },
+    todayCell: {
+      borderWidth: 2,
+      borderColor: theme.colors.today,
+      borderRadius: theme.borderRadius.full,
+    },
+    dayText: {
+      fontSize: theme.fontSize.md,
+      color: theme.colors.text,
+    },
+    selectedDayText: {
+      color: '#FFFFFF',
+      fontWeight: 'bold',
+    },
+    todayText: {
+      color: theme.colors.today,
+      fontWeight: 'bold',
+    },
+    eventDot: {
+      position: 'absolute',
+      top: 4,
+      left: 4,
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+      backgroundColor: theme.colors.error,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    eventCount: {
+      fontSize: 10,
+      color: '#FFFFFF',
+      fontWeight: 'bold',
+    },
+  });
