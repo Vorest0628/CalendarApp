@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, ScrollView, Animated, PanResponder, Dimensions 
 import dayjs from 'dayjs';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { useEventStore } from '../../store/eventStore';
+import { useSettingsStore } from '../../store/settingsStore';
+import { useLunarStore } from '../../store/lunarStore';
 import { getDayLazyLoadData } from '../../utils/lazyLoadUtils';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -13,6 +15,13 @@ export default function DayView() {
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const { selectedDate, setSelectedDate, getEventsForDate } = useEventStore();
+  const showLunar = useSettingsStore(state => state.settings.showLunar);
+  const showSolarTerms = useSettingsStore(state => state.settings.showSolarTerms);
+  const showTraditionalFestivals = useSettingsStore(state => state.settings.showTraditionalFestivals);
+
+  // 使用 LunarStore 获取农历方法
+  const { getFullDateInfo, formatLunarDate, isSolarTermDate, isFestivalDate } = useLunarStore();
+
   const translateX = useRef(new Animated.Value(0)).current;
   const isAnimatingRef = useRef(false); // 标记是否正在动画中
   const hours = Array.from({ length: 24 }, (_, i) => i);
@@ -100,12 +109,39 @@ export default function DayView() {
   ).current;
 
   // 渲染日期标题（带滑动功能）
-  const renderHeader = (date: Date) => (
-    <View style={styles.header}>
-      <Text style={styles.dateText}>{dayjs(date).format('YYYY年M月D日')}</Text>
-      <Text style={styles.weekDayText}>{dayjs(date).format('dddd')}</Text>
-    </View>
-  );
+  const renderHeader = (date: Date) => {
+    // 获取农历信息
+    const dateInfo = showLunar ? getFullDateInfo(date) : null;
+
+    // 获取农历显示文本
+    let lunarInfo = '';
+    let festivals: string[] = [];
+    if (dateInfo) {
+      lunarInfo = formatLunarDate(dateInfo.lunar, 'full');
+      if (showTraditionalFestivals && isFestivalDate(dateInfo)) {
+        festivals = dateInfo.festivals.map(f => f.name);
+      }
+      if (showSolarTerms && isSolarTermDate(dateInfo)) {
+        festivals.unshift(dateInfo.solarTerm!.name);
+      }
+    }
+
+    return (
+      <View style={styles.header}>
+        <Text style={styles.dateText}>{dayjs(date).format('YYYY年M月D日')}</Text>
+        <Text style={styles.weekDayText}>{dayjs(date).format('dddd')}</Text>
+        {showLunar && dateInfo && (
+          <View style={styles.lunarInfoContainer}>
+            <Text style={styles.lunarDateText}>{lunarInfo}</Text>
+            <Text style={styles.zodiacText}>【{dateInfo.lunar.zodiac}年】</Text>
+            {festivals.length > 0 && (
+              <Text style={styles.festivalText}>{festivals.join(' · ')}</Text>
+            )}
+          </View>
+        )}
+      </View>
+    );
+  };
 
   // 渲染日程内容
   const renderDayContent = (date: Date) => {
@@ -248,5 +284,25 @@ const createStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontSize: theme.fontSize.xs,
       color: '#FFFFFF',
       marginTop: 2,
+    },
+    // === 农历信息样式 ===
+    lunarInfoContainer: {
+      marginTop: 8,
+      alignItems: 'center',
+    },
+    lunarDateText: {
+      fontSize: theme.fontSize.sm,
+      color: theme.colors.textSecondary,
+    },
+    zodiacText: {
+      fontSize: theme.fontSize.xs,
+      color: theme.colors.textSecondary,
+      marginTop: 2,
+    },
+    festivalText: {
+      fontSize: theme.fontSize.sm,
+      color: theme.colors.error,
+      fontWeight: '500',
+      marginTop: 4,
     },
   });

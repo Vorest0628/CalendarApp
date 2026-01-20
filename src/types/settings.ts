@@ -24,4 +24,8 @@ export interface AppSettings {
   defaultReminderMinutes: number[]; // 默认提醒时间列表（分钟），可为空
   weekStart: WeekStart; // 周起始日
   notificationsEnabled: boolean; // 是否启用通知（总开关）
+
+  showLunar: boolean; // 是否显示农历日期
+  showSolarTerms: boolean; // 是否显示节气
+  showTraditionalFestivals: boolean; // 是否显示传统节日
 }

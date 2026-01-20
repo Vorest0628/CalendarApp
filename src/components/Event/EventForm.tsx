@@ -19,6 +19,8 @@ import { useAppTheme, AppColors } from '../../theme/useAppTheme';
 import ReminderPicker from './ReminderPicker';
 import ReminderService from '../../services/ReminderService';
 import { useSettingsStore } from '../../store/settingsStore';
+import { useLunarStore } from '../../store/lunarStore';
+import LunarDatePicker from '../Common/LunarDatePicker';
 
 // 预设颜色选项
 const COLOR_OPTIONS = [
@@ -72,6 +74,10 @@ export const EventForm: React.FC<EventFormProps> = ({
   const defaultReminderMinutesSetting = useSettingsStore(
     state => state.settings.defaultReminderMinutes
   );
+
+  // 使用 LunarStore 获取农历方法
+  const { solarToLunar, lunarToSolar } = useLunarStore();
+
   const [reminderMinutes, setReminderMinutes] = useState<number[]>(() => {
     if (initialEvent) {
       return [];
@@ -89,6 +95,27 @@ export const EventForm: React.FC<EventFormProps> = ({
   const [pickerMode, setPickerMode] = useState<'date' | 'time'>('date');
   const [showStartTimePicker, setShowStartTimePicker] = useState<boolean>(false);
   const [showEndTimePicker, setShowEndTimePicker] = useState<boolean>(false);
+
+  // === 第6周新增：农历日程 ===
+  const [isLunarEvent, setIsLunarEvent] = useState<boolean>(initialEvent?.isLunar || false);
+  const [lunarDate, setLunarDate] = useState<{
+    year: number;
+    month: number;
+    day: number;
+    isLeapMonth: boolean;
+  } | null>(() => {
+    if (initialEvent?.isLunar) {
+      // 从公历时间转换为农历
+      const lunar = solarToLunar(initialEvent.startTime);
+      return {
+        year: lunar.year,
+        month: lunar.month,
+        day: lunar.day,
+        isLeapMonth: lunar.isLeapMonth,
+      };
+    }
+    return null;
+  });
 
   // 在编辑模式下，加载现有的提醒设置
   useEffect(() => {
@@ -123,6 +150,29 @@ export const EventForm: React.FC<EventFormProps> = ({
       setEndTime(end);
     }
   }, [isAllDay]);
+
+  // 当农历日期变更时，更新公历时间
+  useEffect(() => {
+    if (isLunarEvent && lunarDate) {
+      const solarDate = lunarToSolar(
+        lunarDate.year,
+        lunarDate.month,
+        lunarDate.day,
+        lunarDate.isLeapMonth
+      );
+      // 保留原来的时间部分
+      solarDate.setHours(startTime.getHours(), startTime.getMinutes());
+      setStartTime(solarDate);
+
+      // 结束时间也调整到同一天
+      const newEndTime = new Date(solarDate);
+      newEndTime.setHours(endTime.getHours(), endTime.getMinutes());
+      if (newEndTime <= solarDate) {
+        newEndTime.setHours(solarDate.getHours() + 1);
+      }
+      setEndTime(newEndTime);
+    }
+  }, [lunarDate, isLunarEvent]);
 
   const handleSubmit = async () => {
     // 表单验证
@@ -170,6 +220,7 @@ export const EventForm: React.FC<EventFormProps> = ({
       endTime,
       isAllDay,
       color,
+      isLunar: isLunarEvent, // 添加农历标记
     };
 
     // 提交日程数据，并传递提醒设置
@@ -310,6 +361,43 @@ export const EventForm: React.FC<EventFormProps> = ({
             />
           </View>
         </View>
+
+        {/* === 第6周新增：农历日程开关 === */}
+        <View style={styles.formGroup}>
+          <View style={styles.switchRow}>
+            <Text style={styles.label}>农历日程</Text>
+            <Switch
+              value={isLunarEvent}
+              onValueChange={(value) => {
+                setIsLunarEvent(value);
+                if (value && !lunarDate) {
+                  // 初始化农历日期为当前公历日期对应的农历
+                  const lunar = solarToLunar(startTime);
+                  setLunarDate({
+                    year: lunar.year,
+                    month: lunar.month,
+                    day: lunar.day,
+                    isLeapMonth: lunar.isLeapMonth,
+                  });
+                }
+              }}
+              trackColor={{ false: colors.border, true: colors.primary }}
+            />
+          </View>
+          {isLunarEvent && (
+            <Text style={styles.lunarHint}>农历日程将显示农历日期，并按农历日期计算</Text>
+          )}
+        </View>
+
+        {/* 农历日期选择器 */}
+        {isLunarEvent && (
+          <View style={styles.formGroup}>
+            <LunarDatePicker
+              value={lunarDate ?? undefined}
+              onChange={setLunarDate}
+            />
+          </View>
+        )}
 
         {/* 地点 */}
         <View style={styles.formGroup}>
@@ -513,5 +601,11 @@ const createStyles = (colors: AppColors) =>
       fontSize: 16,
       fontWeight: '600',
       color: '#FFFFFF',
+    },
+    // === 农历提示样式 ===
+    lunarHint: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      marginTop: 8,
     },
   });

@@ -8,8 +8,10 @@ import {
 } from '../../utils/dateUtils';
 import { useEventStore } from '../../store/eventStore';
 import { useSettingsStore } from '../../store/settingsStore';
+import { useLunarStore } from '../../store/lunarStore';
 import { WeekStart } from '../../types/settings';
 import { getMonthLazyLoadData, MonthData } from '../../utils/lazyLoadUtils';
+import { FullDateInfo } from '../../types/lunar';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25; // 滑动阈值
@@ -21,6 +23,12 @@ export default function MonthView() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const { selectedDate, setSelectedDate, getEventsForDate } = useEventStore();
   const weekStart = useSettingsStore(state => state.settings.weekStart);
+  const showLunar = useSettingsStore(state => state.settings.showLunar);
+  const showSolarTerms = useSettingsStore(state => state.settings.showSolarTerms);
+  const showTraditionalFestivals = useSettingsStore(state => state.settings.showTraditionalFestivals);
+
+  // 使用 LunarStore 获取农历方法
+  const { getFullDateInfo, getLunarDisplayText, isFestivalDate, isSolarTermDate } = useLunarStore();
   
   const translateX = useRef(new Animated.Value(0)).current;
   const isAnimatingRef = useRef(false); // 标记是否正在动画中
@@ -68,6 +76,17 @@ export default function MonthView() {
   const year = currentMonthData.year;
   const month = currentMonthData.month;
   console.log('Rendering month view for:', year, month);
+
+  // 获取农历文本颜色
+  const getLunarTextColor = (dateInfo: FullDateInfo): string => {
+    if (showTraditionalFestivals && isFestivalDate(dateInfo)) {
+      return theme.colors.error; // 节日用红色
+    }
+    if (showSolarTerms && isSolarTermDate(dateInfo)) {
+      return theme.colors.success; // 节气用绿色
+    }
+    return theme.colors.textSecondary;
+  };
 
   const panResponder = useRef(
     PanResponder.create({
@@ -137,6 +156,11 @@ export default function MonthView() {
     const isTodayDate = isToday(date);
     const eventsCount = getEventsForDate(date).length;
 
+    // 获取农历信息
+    const dateInfo = showLunar ? getFullDateInfo(date) : null;
+    const lunarText = dateInfo ? getLunarDisplayText(dateInfo, showTraditionalFestivals, showSolarTerms) : '';
+    const lunarColor = dateInfo ? getLunarTextColor(dateInfo) : theme.colors.textSecondary;
+
     return (
       <TouchableOpacity
         key={date.toISOString()}
@@ -154,6 +178,17 @@ export default function MonthView() {
           ]}>
           {day}
         </Text>
+        {showLunar && (
+          <Text
+            style={[
+              styles.lunarText,
+              isSelected && styles.selectedLunarText,
+              { color: isSelected ? '#FFFFFF' : lunarColor },
+            ]}
+            numberOfLines={1}>
+            {lunarText}
+          </Text>
+        )}
         {eventsCount > 0 && (
           <View style={styles.eventDot}>
             <Text style={styles.eventCount}>{eventsCount}</Text>
@@ -296,5 +331,14 @@ const createStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontSize: 10,
       color: '#FFFFFF',
       fontWeight: 'bold',
+    },
+    // === 农历文本样式 ===
+    lunarText: {
+      fontSize: 9,
+      color: theme.colors.textSecondary,
+      marginTop: 1,
+    },
+    selectedLunarText: {
+      color: '#FFFFFF',
     },
   });

@@ -4,10 +4,12 @@ import dayjs from 'dayjs';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { useEventStore } from '../../store/eventStore';
 import { useSettingsStore } from '../../store/settingsStore';
+import { useLunarStore } from '../../store/lunarStore';
 import { WeekStart } from '../../types/settings';
 import { isToday, isSameDay } from '../../utils/dateUtils';
 import { Event } from '../../types/event';
 import { getWeekLazyLoadData } from '../../utils/lazyLoadUtils';
+import { FullDateInfo } from '../../types/lunar';
 
 const HOUR_HEIGHT = 60; // 每小时的高度
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -19,6 +21,12 @@ export default function WeekView() {
 
   const { selectedDate, setSelectedDate, getEventsForDate, loadEvents, events } = useEventStore();
   const weekStartSetting = useSettingsStore(state => state.settings.weekStart);
+  const showLunar = useSettingsStore(state => state.settings.showLunar);
+  const showSolarTerms = useSettingsStore(state => state.settings.showSolarTerms);
+  const showTraditionalFestivals = useSettingsStore(state => state.settings.showTraditionalFestivals);
+
+  // 使用 LunarStore 获取农历方法
+  const { getFullDateInfo, getLunarDisplayText, isFestivalDate, isSolarTermDate } = useLunarStore();
 
   const [currentWeekStart, setCurrentWeekStart] = useState(() => {
     const d = dayjs();
@@ -85,6 +93,20 @@ export default function WeekView() {
   }, [weekStartSetting]);
   const { prev: prevWeekData, current: currentWeekData, next: nextWeekData } = lazyLoadData;
   const weekDays = currentWeekData.weekDays;
+
+  // 获取农历文本颜色
+  const getLunarTextColor = (dateInfo: FullDateInfo, isSelected: boolean): string => {
+    if (isSelected) {
+      return '#FFFFFF';
+    }
+    if (showTraditionalFestivals && isFestivalDate(dateInfo)) {
+      return theme.colors.error;
+    }
+    if (showSolarTerms && isSolarTermDate(dateInfo)) {
+      return theme.colors.success;
+    }
+    return theme.colors.textSecondary;
+  };
 
   const weekDayLabels = useMemo(() => {
     return weekStartSetting === WeekStart.MONDAY
@@ -195,6 +217,11 @@ export default function WeekView() {
         const isTodayDate = isToday(date);
         const eventsCount = getEventsForDate(date).length;
 
+        // 获取农历信息
+        const dateInfo = showLunar ? getFullDateInfo(date) : null;
+        const lunarText = dateInfo ? getLunarDisplayText(dateInfo, showTraditionalFestivals, showSolarTerms) : '';
+        const lunarColor = dateInfo ? getLunarTextColor(dateInfo, isSelected) : theme.colors.textSecondary;
+
         return (
           <TouchableOpacity
             key={index}
@@ -211,6 +238,11 @@ export default function WeekView() {
               ]}>
               {date.getDate()}
             </Text>
+            {showLunar && (
+              <Text style={[styles.lunarText, { color: lunarColor }]} numberOfLines={1}>
+                {lunarText}
+              </Text>
+            )}
             {/* 始终预留红点空间，避免布局跳动 */}
             <View style={styles.eventIndicatorWrapper}>
               {eventsCount > 0 && <View style={styles.eventIndicator} />}
@@ -411,5 +443,11 @@ const createStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontSize: 10,
       marginTop: 2,
       opacity: 0.9,
+    },
+    // === 农历文本样式 ===
+    lunarText: {
+      fontSize: 9,
+      color: theme.colors.textSecondary,
+      marginTop: 2,
     },
   });

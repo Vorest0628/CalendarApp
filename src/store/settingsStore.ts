@@ -12,6 +12,9 @@ const defaultSettings: AppSettings = {
   defaultReminderMinutes: [15],
   weekStart: WeekStart.MONDAY,
   notificationsEnabled: true,
+  showLunar: true, // 默认显示农历
+  showSolarTerms: true, // 默认显示节气
+  showTraditionalFestivals: true, // 默认显示传统节日
 };
 
 interface SettingsState {
@@ -22,6 +25,9 @@ interface SettingsState {
   setDefaultReminderMinutes: (minutes: number[]) => Promise<void>;
   setWeekStart: (weekStart: WeekStart) => Promise<void>;
   setNotificationsEnabled: (enabled: boolean) => Promise<void>;
+  setShowLunar: (show: boolean) => Promise<void>;
+  setShowSolarTerms: (show: boolean) => Promise<void>;
+  setShowTraditionalFestivals: (show: boolean) => Promise<void>;
   clearCache: () => Promise<void>;
   resetApp: (options?: { clearEvents?: boolean }) => Promise<void>;
 }
@@ -92,6 +98,18 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
 
     setNotificationsEnabled: async (enabled: boolean) => {
       await saveSettings({ notificationsEnabled: enabled });
+    },
+
+    setShowLunar: async (show: boolean) => {
+      await saveSettings({ showLunar: show });
+    },
+
+    setShowSolarTerms: async (show: boolean) => {
+      await saveSettings({ showSolarTerms: show });
+    },
+
+    setShowTraditionalFestivals: async (show: boolean) => {
+      await saveSettings({ showTraditionalFestivals: show });
     },
 
     clearCache: async () => {

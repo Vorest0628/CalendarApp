@@ -26,6 +26,11 @@ const SettingsScreen: React.FC = () => {
   const setNotificationsEnabled = useSettingsStore(
     state => state.setNotificationsEnabled,
   );
+  const setShowLunar = useSettingsStore(state => state.setShowLunar);
+  const setShowSolarTerms = useSettingsStore(state => state.setShowSolarTerms);
+  const setShowTraditionalFestivals = useSettingsStore(
+    state => state.setShowTraditionalFestivals,
+  );
   const clearCache = useSettingsStore(state => state.clearCache);
   const resetApp = useSettingsStore(state => state.resetApp);
 
@@ -178,6 +183,40 @@ const SettingsScreen: React.FC = () => {
         <View style={styles.chipRow}>
           {renderWeekStartOption(WeekStart.SUNDAY, '周日')} 
           {renderWeekStartOption(WeekStart.MONDAY, '周一')}
+        </View>
+      </View>
+
+      {/* === 第6周新增：农历与节日 === */}
+      <Text style={styles.sectionTitle}>农历与节日</Text>
+      <View style={styles.sectionBox}>
+        <View style={styles.rowBetween}>
+          <Text style={styles.label}>显示农历</Text>
+          <Switch
+            value={settings.showLunar}
+            onValueChange={setShowLunar}
+          />
+        </View>
+
+        <View style={styles.divider} />
+
+        <View style={styles.rowBetween}>
+          <Text style={styles.label}>显示节气</Text>
+          <Switch
+            value={settings.showSolarTerms}
+            onValueChange={setShowSolarTerms}
+            disabled={!settings.showLunar}
+          />
+        </View>
+
+        <View style={styles.divider} />
+
+        <View style={styles.rowBetween}>
+          <Text style={styles.label}>显示传统节日</Text>
+          <Switch
+            value={settings.showTraditionalFestivals}
+            onValueChange={setShowTraditionalFestivals}
+            disabled={!settings.showLunar}
+          />
         </View>
       </View>
 
