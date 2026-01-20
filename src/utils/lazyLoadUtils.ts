@@ -1,3 +1,4 @@
+import { useRef, useCallback } from 'react';
 import dayjs from 'dayjs';
 import { getDaysInMonth, getFirstDayOfMonth } from './dateUtils';
 import { WeekStart } from '../types/settings';
@@ -136,5 +137,168 @@ export function getDayLazyLoadData(date: Date): LazyLoadData<DayData> {
     next: {
       date: dayjs(date).add(1, 'day').toDate(),
     },
+  };
+}
+
+/**
+ * 月视图预加载 Hook
+ * 实现动画与数据加载并发，在动画开始时预加载数据
+ * @param weekStart 周起始日设置
+ */
+export function useMonthPreload(weekStart: WeekStart) {
+  // 缓存 Map: key 为 "year-month"
+  const cacheRef = useRef<Map<string, LazyLoadData<MonthData>>>(new Map());
+  // 正在预加载的月份 Set
+  const preloadingRef = useRef<Set<string>>(new Set());
+
+  /**
+   * 获取缓存 key
+   */
+  const getCacheKey = useCallback((year: number, month: number): string => {
+    return `${year}-${month}`;
+  }, []);
+
+  /**
+   * 从缓存获取或计算懒加载数据
+   * @returns 懒加载数据（优先从缓存读取）
+   */
+  const getLazyLoadData = useCallback((year: number, month: number): LazyLoadData<MonthData> => {
+    const key = getCacheKey(year, month);
+    if (cacheRef.current.has(key)) {
+      console.log('[Preload] Cache HIT for:', key);
+      return cacheRef.current.get(key)!;
+    }
+    console.log('[Preload] Cache MISS for:', key, '- calculating...');
+    const data = getMonthLazyLoadData(year, month, weekStart);
+    cacheRef.current.set(key, data);
+    return data;
+  }, [weekStart, getCacheKey]);
+
+  /**
+   * 预加载指定月份的数据（异步，不阻塞动画）
+   * 在动画开始时调用，利用动画时间预先计算
+   */
+  const preloadMonth = useCallback((year: number, month: number) => {
+    const key = getCacheKey(year, month);
+    if (cacheRef.current.has(key) || preloadingRef.current.has(key)) {
+      return; // 已缓存或正在预加载
+    }
+
+    preloadingRef.current.add(key);
+    console.log('[Preload] Starting preload for:', key);
+
+    // 使用 requestAnimationFrame 异步计算，不阻塞动画
+    requestAnimationFrame(() => {
+      if (!cacheRef.current.has(key)) {
+        const data = getMonthLazyLoadData(year, month, weekStart);
+        cacheRef.current.set(key, data);
+        console.log('[Preload] Completed preload for:', key);
+      }
+      preloadingRef.current.delete(key);
+
+      // 同时预加载该月的前后月（扩展缓存深度）
+      preloadAdjacentMonths(year, month);
+    });
+  }, [weekStart, getCacheKey]);
+
+  /**
+   * 预加载相邻月份（前后各1个月）
+   */
+  const preloadAdjacentMonths = useCallback((year: number, month: number) => {
+    const prevMonth = month === 1 ? 12 : month - 1;
+    const prevYear = month === 1 ? year - 1 : year;
+    const nextMonth = month === 12 ? 1 : month + 1;
+    const nextYear = month === 12 ? year + 1 : year;
+
+    // 异步预加载，不阻塞当前渲染
+    setTimeout(() => {
+      const prevKey = getCacheKey(prevYear, prevMonth);
+      const nextKey = getCacheKey(nextYear, nextMonth);
+
+      if (!cacheRef.current.has(prevKey)) {
+        console.log('[Preload] Preloading adjacent (prev):', prevKey);
+        cacheRef.current.set(
+          prevKey,
+          getMonthLazyLoadData(prevYear, prevMonth, weekStart)
+        );
+      }
+      if (!cacheRef.current.has(nextKey)) {
+        console.log('[Preload] Preloading adjacent (next):', nextKey);
+        cacheRef.current.set(
+          nextKey,
+          getMonthLazyLoadData(nextYear, nextMonth, weekStart)
+        );
+      }
+    }, 0);
+  }, [weekStart, getCacheKey]);
+
+  /**
+   * 预加载滑动方向的下一个月份
+   * 在动画开始时调用，预加载更远的月份
+   */
+  const preloadNextInDirection = useCallback((currentYear: number, currentMonth: number, direction: 'prev' | 'next') => {
+    let targetYear: number;
+    let targetMonth: number;
+
+    if (direction === 'next') {
+      // 向左滑动，预加载 next 的 next
+      targetMonth = currentMonth === 12 ? 1 : currentMonth + 1;
+      targetYear = currentMonth === 12 ? currentYear + 1 : currentYear;
+      // 再往后一个月
+      const nextNextMonth = targetMonth === 12 ? 1 : targetMonth + 1;
+      const nextNextYear = targetMonth === 12 ? targetYear + 1 : targetYear;
+      preloadMonth(nextNextYear, nextNextMonth);
+    } else {
+      // 向右滑动，预加载 prev 的 prev
+      targetMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+      targetYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+      // 再往前一个月
+      const prevPrevMonth = targetMonth === 1 ? 12 : targetMonth - 1;
+      const prevPrevYear = targetMonth === 1 ? targetYear - 1 : targetYear;
+      preloadMonth(prevPrevYear, prevPrevMonth);
+    }
+  }, [preloadMonth]);
+
+  /**
+   * 清理过期缓存（保留当前月前后各3个月）
+   */
+  const cleanupCache = useCallback((currentYear: number, currentMonth: number) => {
+    const validRange = new Set<string>();
+    for (let offset = -3; offset <= 3; offset++) {
+      let m = currentMonth + offset;
+      let y = currentYear;
+      if (m < 1) { m += 12; y -= 1; }
+      if (m > 12) { m -= 12; y += 1; }
+      validRange.add(getCacheKey(y, m));
+    }
+
+    // 删除不在有效范围内的缓存
+    let cleanedCount = 0;
+    for (const key of cacheRef.current.keys()) {
+      if (!validRange.has(key)) {
+        cacheRef.current.delete(key);
+        cleanedCount++;
+      }
+    }
+    if (cleanedCount > 0) {
+      console.log('[Preload] Cleaned', cleanedCount, 'expired cache entries');
+    }
+  }, [getCacheKey]);
+
+  /**
+   * 清除所有缓存（用于 weekStart 变化时）
+   */
+  const clearAllCache = useCallback(() => {
+    console.log('[Preload] Clearing all cache');
+    cacheRef.current.clear();
+    preloadingRef.current.clear();
+  }, []);
+
+  return {
+    getLazyLoadData,
+    preloadMonth,
+    preloadNextInDirection,
+    cleanupCache,
+    clearAllCache,
   };
 }

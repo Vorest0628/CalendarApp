@@ -4,9 +4,9 @@
  */
 export const colors = {
   // 主色调
-  primary: '#6200EE',
-  primaryLight: '#9D46FF',
-  primaryDark: '#0A00B6',
+  primary: '#FF7043',
+  primaryLight: '#FFAB91',
+  primaryDark: '#E64A19',
 
   // 辅助色
   secondary: '#03DAC6',
@@ -33,7 +33,7 @@ export const colors = {
 
   // 日历相关颜色
   today: '#FF6B6B',
-  selected: '#6200EE',
+  selected: '#FF7043',
   disabled: '#CCCCCC',
 
   // 日程颜色选项

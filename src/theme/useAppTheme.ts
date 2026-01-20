@@ -11,9 +11,9 @@ import { colors as lightColors } from './colors';
 const darkColors = {
   ...lightColors,
   // 主色调
-  primary: '#BB86FC',
-  primaryLight: '#EFBBFF',
-  primaryDark: '#7B52C9',
+  primary: '#FFAB91',
+  primaryLight: '#FFCCBC',
+  primaryDark: '#FF7043',
   // 辅助色
   secondary: '#03DAC6',
   secondaryLight: '#66FFF9',
@@ -34,7 +34,7 @@ const darkColors = {
   border: '#333333',
   // 日历相关颜色
   today: '#FF6B6B',
-  selected: '#BB86FC',
+  selected: '#FFAB91',
   disabled: '#444444',
 };
 

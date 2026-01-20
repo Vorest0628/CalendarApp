@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, memo, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, PanResponder, Dimensions } from 'react-native';
 import dayjs from 'dayjs';
 import { useAppTheme } from '../../theme/useAppTheme';
@@ -15,18 +15,170 @@ const HOUR_HEIGHT = 60; // 每小时的高度
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
 
+// ==================== WeekDayCell 组件 ====================
+
+interface WeekDayCellProps {
+  date: Date;
+  weekDayLabel: string;
+  showLunar: boolean;
+  showTraditionalFestivals: boolean;
+  showSolarTerms: boolean;
+  theme: ReturnType<typeof useAppTheme>;
+  onPress: (date: Date) => void;
+}
+
+/**
+ * 周视图日期单元格组件（Memoized）
+ * 核心优化：使用 Zustand selector 返回布尔值，而非订阅整个 selectedDate 对象
+ * 效果：点击日期时仅 2 个单元格重渲染（旧选中 + 新选中），而非全部 7 个
+ */
+const WeekDayCell = memo<WeekDayCellProps>(
+  ({ date, weekDayLabel, showLunar, showTraditionalFestivals, showSolarTerms, theme, onPress }) => {
+    // 🔥 关键优化：selector 返回布尔值，而非 Date 对象
+    const isSelected = useEventStore(
+      state => isSameDay(date, state.selectedDate)
+    );
+
+    // 🔥 优化：selector 返回事件数量，而非事件数组
+    const hasEvents = useEventStore(state => {
+      return state.events.some(event => {
+        const eventDate = new Date(event.startTime);
+        return (
+          eventDate.getFullYear() === date.getFullYear() &&
+          eventDate.getMonth() === date.getMonth() &&
+          eventDate.getDate() === date.getDate()
+        );
+      });
+    });
+
+    const isTodayDate = isToday(date);
+
+    // 使用 LunarStore 获取农历方法
+    const { getFullDateInfo, getLunarDisplayText, isFestivalDate, isSolarTermDate } = useLunarStore();
+
+    // 获取农历信息
+    const dateInfo = showLunar ? getFullDateInfo(date) : null;
+    const lunarText = dateInfo ? getLunarDisplayText(dateInfo, showTraditionalFestivals, showSolarTerms) : '';
+
+    // 获取农历文本颜色
+    const getLunarTextColor = (info: FullDateInfo): string => {
+      if (isSelected) {
+        return '#FFFFFF';
+      }
+      if (showTraditionalFestivals && isFestivalDate(info)) {
+        return theme.colors.error;
+      }
+      if (showSolarTerms && isSolarTermDate(info)) {
+        return theme.colors.success;
+      }
+      return theme.colors.textSecondary;
+    };
+
+    const lunarColor = dateInfo ? getLunarTextColor(dateInfo) : theme.colors.textSecondary;
+
+    const styles = useMemo(() => createWeekDayCellStyles(theme), [theme]);
+
+    return (
+      <TouchableOpacity
+        style={[styles.dateCell, isSelected && styles.selectedDateCell]}
+        onPress={() => onPress(date)}>
+        <Text style={[styles.weekDayText, isSelected && styles.selectedText]}>
+          {weekDayLabel}
+        </Text>
+        <Text
+          style={[
+            styles.dayNumberText,
+            isSelected && styles.selectedText,
+            isTodayDate && !isSelected && styles.todayText,
+          ]}>
+          {date.getDate()}
+        </Text>
+        {showLunar && (
+          <Text style={[styles.lunarText, { color: lunarColor }]} numberOfLines={1}>
+            {lunarText}
+          </Text>
+        )}
+        {/* 始终预留红点空间，避免布局跳动 */}
+        <View style={styles.eventIndicatorWrapper}>
+          {hasEvents && <View style={styles.eventIndicator} />}
+        </View>
+      </TouchableOpacity>
+    );
+  },
+  // 自定义比较函数：只比较会影响渲染的 props
+  (prevProps, nextProps) => {
+    return (
+      prevProps.date.getTime() === nextProps.date.getTime() &&
+      prevProps.weekDayLabel === nextProps.weekDayLabel &&
+      prevProps.showLunar === nextProps.showLunar &&
+      prevProps.showTraditionalFestivals === nextProps.showTraditionalFestivals &&
+      prevProps.showSolarTerms === nextProps.showSolarTerms &&
+      prevProps.theme === nextProps.theme
+    );
+  }
+);
+
+// WeekDayCell 样式
+const createWeekDayCellStyles = (theme: ReturnType<typeof useAppTheme>) =>
+  StyleSheet.create({
+    dateCell: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: theme.spacing.sm,
+      borderRadius: theme.borderRadius.md,
+    },
+    selectedDateCell: {
+      backgroundColor: theme.colors.primary,
+    },
+    weekDayText: {
+      fontSize: theme.fontSize.xs,
+      color: theme.colors.textSecondary,
+      marginBottom: 4,
+    },
+    dayNumberText: {
+      fontSize: theme.fontSize.lg,
+      fontWeight: 'bold',
+      color: theme.colors.text,
+    },
+    selectedText: {
+      color: '#FFFFFF',
+    },
+    todayText: {
+      color: theme.colors.today,
+    },
+    eventIndicatorWrapper: {
+      height: 10,
+      marginTop: 4,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    eventIndicator: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: theme.colors.error,
+    },
+    lunarText: {
+      fontSize: 9,
+      color: theme.colors.textSecondary,
+      marginTop: 2,
+    },
+  });
+
+// ==================== WeekView 组件 ====================
+
 export default function WeekView() {
   const theme = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
-  const { selectedDate, setSelectedDate, getEventsForDate, loadEvents, events } = useEventStore();
+  // 🔥 优化：不再订阅 selectedDate 和 getEventsForDate，这些由 WeekDayCell 组件内部处理
+  const setSelectedDate = useEventStore(state => state.setSelectedDate);
+  const loadEvents = useEventStore(state => state.loadEvents);
+  const events = useEventStore(state => state.events);
   const weekStartSetting = useSettingsStore(state => state.settings.weekStart);
   const showLunar = useSettingsStore(state => state.settings.showLunar);
   const showSolarTerms = useSettingsStore(state => state.settings.showSolarTerms);
   const showTraditionalFestivals = useSettingsStore(state => state.settings.showTraditionalFestivals);
-
-  // 使用 LunarStore 获取农历方法
-  const { getFullDateInfo, getLunarDisplayText, isFestivalDate, isSolarTermDate } = useLunarStore();
 
   const [currentWeekStart, setCurrentWeekStart] = useState(() => {
     const d = dayjs();
@@ -93,20 +245,6 @@ export default function WeekView() {
   }, [weekStartSetting]);
   const { prev: prevWeekData, current: currentWeekData, next: nextWeekData } = lazyLoadData;
   const weekDays = currentWeekData.weekDays;
-
-  // 获取农历文本颜色
-  const getLunarTextColor = (dateInfo: FullDateInfo, isSelected: boolean): string => {
-    if (isSelected) {
-      return '#FFFFFF';
-    }
-    if (showTraditionalFestivals && isFestivalDate(dateInfo)) {
-      return theme.colors.error;
-    }
-    if (showSolarTerms && isSolarTermDate(dateInfo)) {
-      return theme.colors.success;
-    }
-    return theme.colors.textSecondary;
-  };
 
   const weekDayLabels = useMemo(() => {
     return weekStartSetting === WeekStart.MONDAY
@@ -177,9 +315,10 @@ export default function WeekView() {
     })
   ).current;
 
-  const handleDatePress = (date: Date) => {
+  // 🔥 使用 useCallback 稳定化 handleDatePress，避免 WeekDayCell 不必要的重渲染
+  const handleDatePress = useCallback((date: Date) => {
     setSelectedDate(date);
-  };
+  }, [setSelectedDate]);
 
   // 计算事件在时间线上的位置和高度
   const getEventStyle = (event: Event) => {
@@ -209,47 +348,21 @@ export default function WeekView() {
     });
   };
 
-  // 渲染日期选择行（带滑动功能）
+  // 🔥 优化：使用新的 WeekDayCell 组件，每个单元格独立订阅自己的状态
   const renderDateRow = (weekDaysData: Date[]) => (
     <View style={styles.dateRow}>
-      {weekDaysData.map((date, index) => {
-        const isSelected = isSameDay(date, selectedDate);
-        const isTodayDate = isToday(date);
-        const eventsCount = getEventsForDate(date).length;
-
-        // 获取农历信息
-        const dateInfo = showLunar ? getFullDateInfo(date) : null;
-        const lunarText = dateInfo ? getLunarDisplayText(dateInfo, showTraditionalFestivals, showSolarTerms) : '';
-        const lunarColor = dateInfo ? getLunarTextColor(dateInfo, isSelected) : theme.colors.textSecondary;
-
-        return (
-          <TouchableOpacity
-            key={index}
-            style={[styles.dateCell, isSelected && styles.selectedDateCell]}
-            onPress={() => handleDatePress(date)}>
-            <Text style={[styles.weekDayText, isSelected && styles.selectedText]}>
-              {weekDayLabels[index]}
-            </Text>
-            <Text
-              style={[
-                styles.dayNumberText,
-                isSelected && styles.selectedText,
-                isTodayDate && !isSelected && styles.todayText,
-              ]}>
-              {date.getDate()}
-            </Text>
-            {showLunar && (
-              <Text style={[styles.lunarText, { color: lunarColor }]} numberOfLines={1}>
-                {lunarText}
-              </Text>
-            )}
-            {/* 始终预留红点空间，避免布局跳动 */}
-            <View style={styles.eventIndicatorWrapper}>
-              {eventsCount > 0 && <View style={styles.eventIndicator} />}
-            </View>
-          </TouchableOpacity>
-        );
-      })}
+      {weekDaysData.map((date, index) => (
+        <WeekDayCell
+          key={date.toISOString()}
+          date={date}
+          weekDayLabel={weekDayLabels[index]}
+          showLunar={showLunar}
+          showTraditionalFestivals={showTraditionalFestivals}
+          showSolarTerms={showSolarTerms}
+          theme={theme}
+          onPress={handleDatePress}
+        />
+      ))}
     </View>
   );
 
@@ -354,43 +467,6 @@ const createStyles = (theme: ReturnType<typeof useAppTheme>) =>
       borderBottomColor: theme.colors.border,
       paddingVertical: theme.spacing.sm,
     },
-    dateCell: {
-      flex: 1,
-      alignItems: 'center',
-      paddingVertical: theme.spacing.sm,
-      borderRadius: theme.borderRadius.md,
-    },
-    selectedDateCell: {
-      backgroundColor: theme.colors.primary,
-    },
-    weekDayText: {
-      fontSize: theme.fontSize.xs,
-      color: theme.colors.textSecondary,
-      marginBottom: 4,
-    },
-    dayNumberText: {
-      fontSize: theme.fontSize.lg,
-      fontWeight: 'bold',
-      color: theme.colors.text,
-    },
-    selectedText: {
-      color: '#FFFFFF',
-    },
-    todayText: {
-      color: theme.colors.today,
-    },
-    eventIndicatorWrapper: {
-      height: 10, // 固定高度，始终预留红点空间
-      marginTop: 4,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    eventIndicator: {
-      width: 6,
-      height: 6,
-      borderRadius: 3,
-      backgroundColor: theme.colors.error,
-    },
     timelineContainer: {
       flex: 1,
     },
@@ -443,11 +519,5 @@ const createStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontSize: 10,
       marginTop: 2,
       opacity: 0.9,
-    },
-    // === 农历文本样式 ===
-    lunarText: {
-      fontSize: 9,
-      color: theme.colors.textSecondary,
-      marginTop: 2,
     },
   });
