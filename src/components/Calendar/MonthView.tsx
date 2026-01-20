@@ -10,7 +10,7 @@ import { useEventStore } from '../../store/eventStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useLunarStore } from '../../store/lunarStore';
 import { WeekStart } from '../../types/settings';
-import { getMonthLazyLoadData, MonthData } from '../../utils/lazyLoadUtils';
+import { getMonthLazyLoadData, MonthData, useMonthPreload } from '../../utils/lazyLoadUtils';
 import { FullDateInfo } from '../../types/lunar';
 
 // ==================== DayCell 组件 ====================
@@ -121,12 +121,15 @@ const DayCell = memo<DayCellProps>(
   }
 );
 
+// DayCell 固定高度，保证每行高度一致
+const DAY_CELL_HEIGHT = 64;
+
 // DayCell 样式（独立出来避免重复创建）
 const createDayCellStyles = (theme: ReturnType<typeof useAppTheme>) =>
   StyleSheet.create({
     dayCell: {
       width: '14.28%',
-      aspectRatio: 1,
+      height: DAY_CELL_HEIGHT,
       alignItems: 'center',
       justifyContent: 'center',
       padding: theme.spacing.xs,
@@ -190,23 +193,46 @@ export default function MonthView() {
   const [currentDate, setCurrentDate] = useState(new Date());
   // 🔥 优化：不再订阅 selectedDate 和 getEventsForDate，这些由 DayCell 组件内部处理
   const setSelectedDate = useEventStore(state => state.setSelectedDate);
+  // 获取选中日期用于底部显示
+  const selectedDate = useEventStore(state => state.selectedDate);
   const weekStart = useSettingsStore(state => state.settings.weekStart);
   const showLunar = useSettingsStore(state => state.settings.showLunar);
   const showSolarTerms = useSettingsStore(state => state.settings.showSolarTerms);
   const showTraditionalFestivals = useSettingsStore(state => state.settings.showTraditionalFestivals);
   
+  // 使用 LunarStore 获取农历信息
+  const { getFullDateInfo } = useLunarStore();
+  
+  // 获取选中日期的完整农历信息
+  const selectedDateInfo = useMemo(() => {
+    if (!selectedDate) return null;
+    return getFullDateInfo(selectedDate);
+  }, [selectedDate, getFullDateInfo]);
+  
   const translateX = useRef(new Animated.Value(0)).current;
   const isAnimatingRef = useRef(false); // 标记是否正在动画中
+  
+  // 🔥 性能优化：使用预加载 Hook 实现动画与数据加载并发
+  const { 
+    getLazyLoadData, 
+    preloadMonth, 
+    preloadNextInDirection, 
+    cleanupCache, 
+    clearAllCache 
+  } = useMonthPreload(weekStart);
+
+  // 保存上一次的 weekStart，用于检测变化
+  const prevWeekStartRef = useRef(weekStart);
   
   // 使用时间戳作为依赖项，确保 Date 对象变化能被检测到
   const currentDateKey = currentDate.getTime();
   
-  // 手动管理懒加载数据状态
+  // 🔥 优化：使用预加载 Hook 获取懒加载数据（优先从缓存读取）
   const [lazyLoadData, setLazyLoadData] = useState(() => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth() + 1;
-    console.log('Initial lazy load data for:', year, month, 'with weekStart:', weekStart);
-    return getMonthLazyLoadData(year, month, weekStart);
+    console.log('[MonthView] Initial lazy load data for:', year, month, 'with weekStart:', weekStart);
+    return getLazyLoadData(year, month);
   });
   
   // 使用 ref 保存最新的懒加载数据，避免闭包问题
@@ -218,21 +244,34 @@ export default function MonthView() {
     
     // 如果正在动画中且数据已更新，重置 translateX
     if (isAnimatingRef.current) {
-      console.log('Data updated after animation, resetting translateX');
+      console.log('[MonthView] Data updated after animation, resetting translateX');
       translateX.setValue(0);
       isAnimatingRef.current = false;
     }
   }, [lazyLoadData]);
 
+  // 监听 weekStart 变化，清除缓存
+  useEffect(() => {
+    if (prevWeekStartRef.current !== weekStart) {
+      console.log('[MonthView] WeekStart changed, clearing cache');
+      clearAllCache();
+      prevWeekStartRef.current = weekStart;
+    }
+  }, [weekStart, clearAllCache]);
+
   // 监听 currentDateKey 或 weekStart 变化，手动更新懒加载数据
   useEffect(() => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth() + 1;
-    console.log('useEffect triggered! Updating lazy load data for:', year, month, 'weekStart:', weekStart);
-    const newData = getMonthLazyLoadData(year, month, weekStart);
-    console.log('New data calculated:', newData);
+    console.log('[MonthView] useEffect triggered! Updating lazy load data for:', year, month, 'weekStart:', weekStart);
+    // 🔥 优化：从缓存获取数据（如果已预加载，则瞬时返回）
+    const newData = getLazyLoadData(year, month);
+    console.log('[MonthView] New data obtained');
     setLazyLoadData(newData);
-  }, [currentDateKey, weekStart]); // 依赖项包含 weekStart
+    
+    // 🔥 清理过期缓存，保持内存占用可控
+    cleanupCache(year, month);
+  }, [currentDateKey, weekStart, getLazyLoadData, cleanupCache]);
 
   // 直接从 lazyLoadData 解构，确保使用最新数据
   const { prev: prevMonthData, current: currentMonthData, next: nextMonthData } = lazyLoadData;
@@ -240,12 +279,25 @@ export default function MonthView() {
   // 用于显示标题的年月
   const year = currentMonthData.year;
   const month = currentMonthData.month;
-  console.log('Rendering month view for:', year, month);
+  console.log('[MonthView] Rendering month view for:', year, month);
 
-  const panResponder = useRef(
+  // 🔥 性能优化：使用 useMemo 创建 PanResponder，在手势开始时预加载
+  const panResponder = useMemo(() => 
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gestureState) => {
         return Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && Math.abs(gestureState.dx) > 10;
+      },
+      // 🔥 关键优化：手势开始时立即预加载前后月份数据
+      onPanResponderGrant: () => {
+        const { year: curYear, month: curMonth } = lazyLoadDataRef.current.current;
+        const prevMonth = curMonth === 1 ? 12 : curMonth - 1;
+        const prevYear = curMonth === 1 ? curYear - 1 : curYear;
+        const nextMonth = curMonth === 12 ? 1 : curMonth + 1;
+        const nextYear = curMonth === 12 ? curYear + 1 : curYear;
+        
+        console.log('[MonthView] Gesture started, preloading adjacent months');
+        preloadMonth(prevYear, prevMonth);
+        preloadMonth(nextYear, nextMonth);
       },
       onPanResponderMove: (_, gestureState) => {
         translateX.setValue(gestureState.dx);
@@ -254,6 +306,11 @@ export default function MonthView() {
         if (gestureState.dx > SWIPE_THRESHOLD) {
           // 向右滑动 - 上一个月
           isAnimatingRef.current = true;
+          
+          // 🔥 关键：动画开始的同时，预加载更远的月份
+          const { year: curYear, month: curMonth } = lazyLoadDataRef.current.current;
+          preloadNextInDirection(curYear, curMonth, 'prev');
+          
           Animated.timing(translateX, {
             toValue: SCREEN_WIDTH,
             duration: 200,
@@ -262,13 +319,18 @@ export default function MonthView() {
             // 使用 ref 获取最新的懒加载数据
             const latestData = lazyLoadDataRef.current;
             const targetDate = new Date(latestData.prev.year, latestData.prev.month - 1, 1);
-            console.log('Swiping to previous month:', latestData.prev.year, latestData.prev.month);
+            console.log('[MonthView] Swiping to previous month:', latestData.prev.year, latestData.prev.month);
             setCurrentDate(targetDate);
             // 不立即重置 translateX，等待 lazyLoadData 更新后再重置
           });
         } else if (gestureState.dx < -SWIPE_THRESHOLD) {
           // 向左滑动 - 下一个月
           isAnimatingRef.current = true;
+          
+          // 🔥 关键：动画开始的同时，预加载更远的月份
+          const { year: curYear, month: curMonth } = lazyLoadDataRef.current.current;
+          preloadNextInDirection(curYear, curMonth, 'next');
+          
           Animated.timing(translateX, {
             toValue: -SCREEN_WIDTH,
             duration: 200,
@@ -277,7 +339,7 @@ export default function MonthView() {
             // 使用 ref 获取最新的懒加载数据
             const latestData = lazyLoadDataRef.current;
             const targetDate = new Date(latestData.next.year, latestData.next.month - 1, 1);
-            console.log('Swiping to next month:', latestData.next.year, latestData.next.month);
+            console.log('[MonthView] Swiping to next month:', latestData.next.year, latestData.next.month);
             setCurrentDate(targetDate);
             // 不立即重置 translateX，等待 lazyLoadData 更新后再重置
           });
@@ -289,8 +351,8 @@ export default function MonthView() {
           }).start();
         }
       },
-    })
-  ).current;
+    }),
+  [preloadMonth, preloadNextInDirection, translateX]);
 
   // 🔥 使用 useCallback 稳定化 handleDatePress，避免 DayCell 不必要的重渲染
   const handleDatePress = useCallback((date: Date) => {
@@ -360,6 +422,43 @@ export default function MonthView() {
           {renderMonthGrid(nextMonthData)}
         </View>
       </Animated.View>
+
+      {/* 选中日期的农历信息显示区域 */}
+      {showLunar && selectedDateInfo && (
+        <View style={styles.selectedDateInfo}>
+          {/* 主信息行：农历日期 + 生肖 */}
+          <View style={styles.lunarMainRow}>
+            <Text style={styles.lunarMainText}>
+              {selectedDateInfo.lunar.monthCn}{selectedDateInfo.lunar.dayCn}
+            </Text>
+            <View style={styles.zodiacBadge}>
+              <Text style={styles.zodiacText}>{selectedDateInfo.lunar.zodiac}年</Text>
+            </View>
+          </View>
+          
+          {/* 干支信息行 */}
+          <Text style={styles.ganzhiText}>
+            {selectedDateInfo.lunar.yearGanZhi}年 {selectedDateInfo.lunar.monthGanZhi}月 {selectedDateInfo.lunar.dayGanZhi}日
+          </Text>
+          
+          {/* 节气和节日标签 */}
+          {((showSolarTerms && selectedDateInfo.solarTerm) || 
+            (showTraditionalFestivals && selectedDateInfo.festivals && selectedDateInfo.festivals.length > 0)) && (
+            <View style={styles.tagsRow}>
+              {showSolarTerms && selectedDateInfo.solarTerm && (
+                <View style={styles.solarTermTag}>
+                  <Text style={styles.solarTermTagText}>{selectedDateInfo.solarTerm.name}</Text>
+                </View>
+              )}
+              {showTraditionalFestivals && selectedDateInfo.festivals && selectedDateInfo.festivals.map((festival, index) => (
+                <View key={index} style={styles.festivalTag}>
+                  <Text style={styles.festivalTagText}>{festival.name}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+      )}
     </View>
   );
 }
@@ -377,7 +476,7 @@ const createStyles = (theme: ReturnType<typeof useAppTheme>) =>
       paddingHorizontal: theme.spacing.md,
     },
     headerTitle: {
-      fontSize: theme.fontSize.lg,
+      fontSize: theme.fontSize.xxl,
       fontWeight: 'bold',
       color: theme.colors.text,
     },
@@ -409,9 +508,89 @@ const createStyles = (theme: ReturnType<typeof useAppTheme>) =>
     // 空单元格的样式（用于月份首日前的占位）
     dayCell: {
       width: '14.28%',
-      aspectRatio: 1,
+      height: DAY_CELL_HEIGHT,
       alignItems: 'center',
       justifyContent: 'center',
       padding: theme.spacing.xs,
+    },
+    // 选中日期的农历信息显示区域
+    selectedDateInfo: {
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.lg,
+      marginHorizontal: theme.spacing.md,
+      marginTop: theme.spacing.md,
+      borderRadius: theme.borderRadius.lg,
+      backgroundColor: theme.colors.surface,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    lunarMainRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: theme.spacing.xs,
+    },
+    lunarMainText: {
+      fontSize: theme.fontSize.xl,
+      fontWeight: 'bold',
+      color: theme.colors.text,
+    },
+    zodiacBadge: {
+      marginLeft: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.sm,
+      paddingVertical: 2,
+      borderRadius: theme.borderRadius.sm,
+      backgroundColor: theme.colors.primary,
+    },
+    zodiacText: {
+      fontSize: theme.fontSize.xs,
+      color: '#FFFFFF',
+      fontWeight: '600',
+    },
+    ganzhiText: {
+      fontSize: theme.fontSize.sm,
+      color: theme.colors.textSecondary,
+      textAlign: 'center',
+      marginBottom: theme.spacing.sm,
+    },
+    tagsRow: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      flexWrap: 'wrap',
+      gap: theme.spacing.xs,
+    },
+    solarTermTag: {
+      paddingHorizontal: theme.spacing.sm,
+      paddingVertical: 4,
+      borderRadius: theme.borderRadius.full,
+      backgroundColor: theme.colors.success + '20',
+      borderWidth: 1,
+      borderColor: theme.colors.success,
+    },
+    solarTermTagText: {
+      fontSize: theme.fontSize.xs,
+      color: theme.colors.success,
+      fontWeight: '600',
+    },
+    festivalTag: {
+      paddingHorizontal: theme.spacing.sm,
+      paddingVertical: 4,
+      borderRadius: theme.borderRadius.full,
+      backgroundColor: theme.colors.error + '20',
+      borderWidth: 1,
+      borderColor: theme.colors.error,
+    },
+    festivalTagText: {
+      fontSize: theme.fontSize.xs,
+      color: theme.colors.error,
+      fontWeight: '600',
+    },
+    selectedDateInfoText: {
+      fontSize: theme.fontSize.md,
+      color: theme.colors.text,
+      fontWeight: '500',
     },
   });
