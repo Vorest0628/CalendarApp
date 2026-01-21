@@ -145,12 +145,33 @@ export default function DayView() {
 
   // 渲染日程内容
   const renderDayContent = (date: Date) => {
-    const events = getEventsForDate(date);
+    const allEvents = getEventsForDate(date);
+    
+    // 分离全天事件和普通事件
+    const allDayEvents = allEvents.filter(e => e.isAllDay);
+    const regularEvents = allEvents.filter(e => !e.isAllDay);
     
     return (
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* 全天事件区域 - 放在顶部但透明度降低 */}
+        {allDayEvents.length > 0 && (
+          <View style={styles.allDaySection}>
+            <Text style={styles.allDaySectionTitle}>全天</Text>
+            {allDayEvents.map(event => (
+              <View
+                key={event.id}
+                style={[styles.allDayEventBlock, { backgroundColor: event.color }]}>
+                <Text style={styles.allDayEventTitle} numberOfLines={1}>
+                  {event.title}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+        
+        {/* 时间线 */}
         {hours.map(hour => {
-          const hourEvents = events.filter(event => {
+          const hourEvents = regularEvents.filter(event => {
             const eventHour = new Date(event.startTime).getHours();
             return eventHour === hour;
           });
@@ -304,5 +325,28 @@ const createStyles = (theme: ReturnType<typeof useAppTheme>) =>
       color: theme.colors.error,
       fontWeight: '500',
       marginTop: 4,
+    },
+    // === 全天事件样式 ===
+    allDaySection: {
+      padding: theme.spacing.sm,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+    },
+    allDaySectionTitle: {
+      fontSize: theme.fontSize.xs,
+      color: theme.colors.textSecondary,
+      marginBottom: 8,
+    },
+    allDayEventBlock: {
+      borderRadius: theme.borderRadius.sm,
+      padding: theme.spacing.sm,
+      marginBottom: 4,
+      opacity: 0.6,
+    },
+    allDayEventTitle: {
+      fontSize: theme.fontSize.sm,
+      fontWeight: '600',
+      color: '#FFFFFF',
     },
   });

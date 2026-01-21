@@ -34,6 +34,36 @@ class ReminderService {
   }
 
   /**
+   * 判断是否为固定时间提醒（负数）
+   */
+  private isFixedTimeReminder(minutes: number): boolean {
+    return minutes < 0;
+  }
+
+  /**
+   * 计算提醒触发时间
+   * @param event 事件
+   * @param minutesBefore 提前分钟数（正数）或固定时间（负数，绝对值为当天分钟数）
+   */
+  private calculateTriggerTime(event: Event, minutesBefore: number): Date {
+    if (this.isFixedTimeReminder(minutesBefore)) {
+      // 固定时间提醒：绝对值为当天的分钟数
+      const totalMinutes = Math.abs(minutesBefore);
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      
+      // 使用事件日期的年月日，加上固定的时分
+      const triggerTime = new Date(event.startTime);
+      triggerTime.setHours(hours, minutes, 0, 0);
+      
+      return triggerTime;
+    } else {
+      // 相对时间提醒：事件开始时间减去提前分钟数
+      return new Date(event.startTime.getTime() - minutesBefore * 60 * 1000);
+    }
+  }
+
+  /**
    * 为日程创建单个提醒
    */
   async createReminder(
@@ -43,9 +73,7 @@ class ReminderService {
   ): Promise<Reminder> {
     try {
       // 计算触发时间
-      const triggerTime = new Date(
-        event.startTime.getTime() - minutesBefore * 60 * 1000
-      );
+      const triggerTime = this.calculateTriggerTime(event, minutesBefore);
 
       // 检查触发时间是否已过（给予 30 秒缓冲）
       const now = Date.now();
@@ -100,9 +128,17 @@ class ReminderService {
   ): Promise<Reminder[]> {
     try {
       const reminders: Reminder[] = [];
+      const now = Date.now();
 
       for (const minutes of minutesBeforeList) {
         try {
+          // 预先检查触发时间，对于已过期的提醒静默跳过
+          const triggerTime = this.calculateTriggerTime(event, minutes);
+          if (triggerTime.getTime() <= now + 30000) {
+            console.log(`Skipping reminder (trigger time in past): ${minutes} for event ${event.id}`);
+            continue;
+          }
+          
           const reminder = await this.createReminder(event, minutes);
           reminders.push(reminder);
         } catch (error) {
@@ -307,6 +343,15 @@ class ReminderService {
       minute: '2-digit',
     });
 
+    // 固定时间提醒
+    if (this.isFixedTimeReminder(minutesBefore)) {
+      if (event.isAllDay) {
+        return `今日全天事件`;
+      }
+      return `今日 ${startTime} 开始`;
+    }
+
+    // 相对时间提醒
     if (minutesBefore === 0) {
       return `现在开始 · ${startTime}`;
     } else if (minutesBefore < 60) {

@@ -340,13 +340,27 @@ export default function WeekView() {
     return { top, height };
   };
 
-  // 获取某一天的所有事件
+  // 获取某一天的所有事件，分离全天事件和普通事件
   const getEventsForDay = (date: Date) => {
-    return events.filter(event => {
+    const dayEvents = events.filter(event => {
       const eventDate = dayjs(event.startTime);
       return eventDate.isSame(dayjs(date), 'day');
     });
+    
+    // 分离全天事件和普通事件
+    const allDayEvents = dayEvents.filter(e => e.isAllDay);
+    const regularEvents = dayEvents.filter(e => !e.isAllDay);
+    
+    return { allDayEvents, regularEvents };
   };
+
+  // 检查本周是否有全天事件
+  const hasAnyAllDayEvents = useMemo(() => {
+    return weekDays.some(date => {
+      const { allDayEvents } = getEventsForDay(date);
+      return allDayEvents.length > 0;
+    });
+  }, [weekDays, events]);
 
   // 🔥 优化：使用新的 WeekDayCell 组件，每个单元格独立订阅自己的状态
   const renderDateRow = (weekDaysData: Date[]) => (
@@ -390,6 +404,37 @@ export default function WeekView() {
         </View>
       </Animated.View>
 
+      {/* 全天事件区域（放在顶部） */}
+      {hasAnyAllDayEvents && (
+        <View style={styles.allDaySection}>
+          <View style={styles.allDayLabel}>
+            <Text style={styles.allDayLabelText}>全天</Text>
+          </View>
+          <View style={styles.allDayEventsRow}>
+            {weekDays.map((date, dayIndex) => {
+              const { allDayEvents } = getEventsForDay(date);
+              return (
+                <View key={dayIndex} style={styles.allDayColumn}>
+                  {allDayEvents.map(event => (
+                    <TouchableOpacity
+                      key={event.id}
+                      style={[
+                        styles.allDayEventCard,
+                        { backgroundColor: event.color || theme.colors.primary },
+                      ]}
+                      activeOpacity={0.8}>
+                      <Text style={styles.allDayEventTitle} numberOfLines={1}>
+                        {event.title}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
       {/* 时间线区域（保持上下滚动） */}
       <ScrollView style={styles.timelineContainer} showsVerticalScrollIndicator={false}>
         <View style={styles.timelineContent}>
@@ -405,7 +450,7 @@ export default function WeekView() {
           {/* 日期列 */}
           <View style={styles.daysContainer}>
             {weekDays.map((date, dayIndex) => {
-              const dayEvents = getEventsForDay(date);
+              const { regularEvents } = getEventsForDay(date);
               
               return (
                 <View key={dayIndex} style={styles.dayColumn}>
@@ -414,8 +459,8 @@ export default function WeekView() {
                     <View key={hour} style={styles.hourLine} />
                   ))}
                   
-                  {/* 事件卡片 */}
-                  {dayEvents.map(event => {
+                  {/* 普通事件卡片 */}
+                  {regularEvents.map(event => {
                     const { top, height } = getEventStyle(event);
                     return (
                       <TouchableOpacity
@@ -466,6 +511,45 @@ const createStyles = (theme: ReturnType<typeof useAppTheme>) =>
       borderBottomWidth: 1,
       borderBottomColor: theme.colors.border,
       paddingVertical: theme.spacing.sm,
+    },
+    // 全天事件区域样式
+    allDaySection: {
+      flexDirection: 'row',
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+      minHeight: 32,
+    },
+    allDayLabel: {
+      width: 50,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    allDayLabelText: {
+      fontSize: theme.fontSize.xs,
+      color: theme.colors.textSecondary,
+    },
+    allDayEventsRow: {
+      flex: 1,
+      flexDirection: 'row',
+    },
+    allDayColumn: {
+      flex: 1,
+      paddingHorizontal: 2,
+      paddingVertical: 4,
+      borderLeftWidth: 1,
+      borderLeftColor: theme.colors.border,
+    },
+    allDayEventCard: {
+      borderRadius: 4,
+      padding: 4,
+      marginBottom: 2,
+      opacity: 0.7,
+    },
+    allDayEventTitle: {
+      color: '#FFFFFF',
+      fontSize: theme.fontSize.xs,
+      fontWeight: '600',
     },
     timelineContainer: {
       flex: 1,

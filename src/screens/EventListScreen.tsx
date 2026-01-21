@@ -7,6 +7,7 @@ import {
   Modal,
   ActivityIndicator,
   Alert,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -25,6 +26,7 @@ export default function EventListScreen() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [isDbReady, setIsDbReady] = useState(false);
+  const [searchText, setSearchText] = useState('');
 
   // 检查数据库是否就绪
   React.useEffect(() => {
@@ -103,10 +105,23 @@ export default function EventListScreen() {
     }
   };
 
-  // 按日期排序
-  const sortedEvents = [...events].sort(
-    (a, b) => a.startTime.getTime() - b.startTime.getTime()
-  );
+  // 按日期排序并根据搜索关键词过滤
+  const filteredEvents = useMemo(() => {
+    let result = [...events];
+    
+    // 根据搜索关键词过滤
+    if (searchText.trim()) {
+      const keyword = searchText.trim().toLowerCase();
+      result = result.filter(event => 
+        event.title.toLowerCase().includes(keyword)
+      );
+    }
+    
+    // 按日期排序
+    return result.sort(
+      (a, b) => a.startTime.getTime() - b.startTime.getTime()
+    );
+  }, [events, searchText]);
 
   if (isLoading) {
     return (
@@ -128,11 +143,20 @@ export default function EventListScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>日程列表</Text>
-        <Text style={styles.count}>共 {events.length} 个日程</Text>
+        <Text style={styles.count}>共 {filteredEvents.length} 个日程</Text>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="搜索日程标题..."
+          placeholderTextColor={theme.colors.textSecondary}
+          value={searchText}
+          onChangeText={setSearchText}
+          clearButtonMode="while-editing"
+          returnKeyType="search"
+        />
       </View>
 
       <FlatList
-        data={sortedEvents}
+        data={filteredEvents}
         keyExtractor={item => item.id}
         renderItem={({ item }) => (
           <EventCard
@@ -205,6 +229,17 @@ const createStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontSize: theme.fontSize.sm,
       color: theme.colors.textSecondary,
       marginTop: 4,
+    },
+    searchInput: {
+      marginTop: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.sm,
+      backgroundColor: theme.colors.background,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      fontSize: theme.fontSize.md,
+      color: theme.colors.text,
     },
     listContent: {
       paddingVertical: 8,

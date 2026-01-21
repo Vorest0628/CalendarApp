@@ -187,12 +187,18 @@ export const EventForm: React.FC<EventFormProps> = ({
     }
 
     // 验证提醒时间（如果设置了提醒）
-    if (reminderMinutes.length > 0) {
+    // 全天事件或固定时间提醒跳过此验证
+    if (reminderMinutes.length > 0 && !isAllDay) {
       const now = Date.now();
       const minReminderTime = 2 * 60 * 1000; // 2分钟
       
-      // 检查每个提醒的触发时间
+      // 只检查相对时间提醒（正数），固定时间提醒（负数）跳过
       for (const minutes of reminderMinutes) {
+        // 跳过固定时间提醒（负数）
+        if (minutes < 0) {
+          continue;
+        }
+        
         const triggerTime = startTime.getTime() - minutes * 60 * 1000;
         const timeUntilTrigger = triggerTime - now;
         
@@ -239,6 +245,12 @@ export const EventForm: React.FC<EventFormProps> = ({
         newStart.setHours(startTime.getHours(), startTime.getMinutes());
         setStartTime(newStart);
 
+        // 全天事件不需要选择时间，直接关闭
+        if (isAllDay) {
+          setShowStartPicker(false);
+          return;
+        }
+
         if (Platform.OS === 'android') {
           // Android 上接着显示时间选择器
           setShowStartTimePicker(true);
@@ -273,6 +285,12 @@ export const EventForm: React.FC<EventFormProps> = ({
         const newEnd = new Date(selectedDate);
         newEnd.setHours(endTime.getHours(), endTime.getMinutes());
         setEndTime(newEnd);
+
+        // 全天事件不需要选择时间，直接关闭
+        if (isAllDay) {
+          setShowEndPicker(false);
+          return;
+        }
 
         if (Platform.OS === 'android') {
           // Android 上接着显示时间选择器
@@ -327,27 +345,67 @@ export const EventForm: React.FC<EventFormProps> = ({
         {/* 开始时间 */}
         <View style={styles.formGroup}>
           <Text style={styles.label}>开始时间</Text>
-          <TouchableOpacity
-            style={styles.dateButton}
-            onPress={() => {
-              setPickerMode('date');
-              setShowStartPicker(true);
-            }}>
-            <Text style={styles.dateText}>{formatDateTime(startTime)}</Text>
-          </TouchableOpacity>
+          <View style={styles.dateTimeRow}>
+            <TouchableOpacity
+              style={[styles.dateButton, isAllDay && styles.dateButtonFullWidth]}
+              onPress={() => {
+                setPickerMode('date');
+                setShowStartPicker(true);
+              }}>
+              <Text style={styles.dateText}>
+                {startTime.getFullYear()}-{String(startTime.getMonth() + 1).padStart(2, '0')}-{String(startTime.getDate()).padStart(2, '0')}
+              </Text>
+            </TouchableOpacity>
+            {!isAllDay && (
+              <TouchableOpacity
+                style={styles.timeButton}
+                onPress={() => {
+                  if (Platform.OS === 'android') {
+                    setShowStartTimePicker(true);
+                  } else {
+                    setPickerMode('time');
+                    setShowStartPicker(true);
+                  }
+                }}>
+                <Text style={styles.dateText}>
+                  {String(startTime.getHours()).padStart(2, '0')}:{String(startTime.getMinutes()).padStart(2, '0')}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
         {/* 结束时间 */}
         <View style={styles.formGroup}>
           <Text style={styles.label}>结束时间</Text>
-          <TouchableOpacity
-            style={styles.dateButton}
-            onPress={() => {
-              setPickerMode('date');
-              setShowEndPicker(true);
-            }}>
-            <Text style={styles.dateText}>{formatDateTime(endTime)}</Text>
-          </TouchableOpacity>
+          <View style={styles.dateTimeRow}>
+            <TouchableOpacity
+              style={[styles.dateButton, isAllDay && styles.dateButtonFullWidth]}
+              onPress={() => {
+                setPickerMode('date');
+                setShowEndPicker(true);
+              }}>
+              <Text style={styles.dateText}>
+                {endTime.getFullYear()}-{String(endTime.getMonth() + 1).padStart(2, '0')}-{String(endTime.getDate()).padStart(2, '0')}
+              </Text>
+            </TouchableOpacity>
+            {!isAllDay && (
+              <TouchableOpacity
+                style={styles.timeButton}
+                onPress={() => {
+                  if (Platform.OS === 'android') {
+                    setShowEndTimePicker(true);
+                  } else {
+                    setPickerMode('time');
+                    setShowEndPicker(true);
+                  }
+                }}>
+                <Text style={styles.dateText}>
+                  {String(endTime.getHours()).padStart(2, '0')}:{String(endTime.getMinutes()).padStart(2, '0')}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
         {/* 全天事件 */}
@@ -362,7 +420,7 @@ export const EventForm: React.FC<EventFormProps> = ({
           </View>
         </View>
 
-        {/* === 第6周新增：农历日程开关 === */}
+        {/* 第6周新增：农历日程开关 */}
         <View style={styles.formGroup}>
           <View style={styles.switchRow}>
             <Text style={styles.label}>农历日程</Text>
@@ -449,6 +507,7 @@ export const EventForm: React.FC<EventFormProps> = ({
           <ReminderPicker
             selectedMinutes={reminderMinutes}
             onSelect={setReminderMinutes}
+            isAllDay={isAllDay}
           />
         </View>
 
@@ -542,11 +601,29 @@ const createStyles = (colors: AppColors) =>
       paddingTop: 12,
     },
     dateButton: {
+      flex: 1,
       backgroundColor: colors.surface,
       borderRadius: 8,
       padding: 12,
       borderWidth: 1,
       borderColor: colors.border,
+    },
+    dateButtonFullWidth: {
+      flex: 1,
+    },
+    timeButton: {
+      backgroundColor: colors.surface,
+      borderRadius: 8,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginLeft: 8,
+      minWidth: 80,
+      alignItems: 'center',
+    },
+    dateTimeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
     },
     dateText: {
       fontSize: 16,
