@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useMemo } from 'react';
+import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, Animated, PanResponder, Dimensions } from 'react-native';
 import dayjs from 'dayjs';
 import { useAppTheme } from '../../theme/useAppTheme';
@@ -6,9 +6,21 @@ import { useEventStore } from '../../store/eventStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useLunarStore } from '../../store/lunarStore';
 import { getDayLazyLoadData } from '../../utils/lazyLoadUtils';
+import { Event } from '../../types/event';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
+
+// 时间线常量
+const HOUR_HEIGHT = 80; // 每小时的高度
+const TIME_LABEL_WIDTH = 60; // 时间标签宽度
+const SINGLE_EVENT_WIDTH = 90; // 单个事件的宽度
+const EVENT_PADDING = 6; // 事件之间的间距
+
+// 扩展 Event 类型，添加 widthOrder 属性
+interface EventWithOrder extends Event {
+  widthOrder?: number;
+}
 
 export default function DayView() {
   const theme = useAppTheme();
@@ -25,6 +37,9 @@ export default function DayView() {
   const translateX = useRef(new Animated.Value(0)).current;
   const isAnimatingRef = useRef(false); // 标记是否正在动画中
   const hours = Array.from({ length: 24 }, (_, i) => i);
+
+  // 使用 ref 存储 widthOrder 计算结果，避免重复计算
+  const widthOrderMapRef = useRef<Map<string, number>>(new Map());
 
   // 使用时间戳作为依赖项，确保 Date 对象变化能被检测到
   const selectedDateKey = selectedDate.getTime();
@@ -143,6 +158,72 @@ export default function DayView() {
     );
   };
 
+  // 计算事件堆叠的 widthOrder（贪心算法，尽量复用空闲列）
+  const calculateWidthOrders = useCallback((events: EventWithOrder[]): Map<string, number> => {
+    const resultMap = new Map<string, number>();
+    
+    if (events.length === 0) return resultMap;
+
+    // 按开始时间排序
+    const sortedEvents = [...events].sort((a, b) => {
+      return new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
+    });
+
+    // prevMaxBottom[j] 表示第 j 列（widthOrder = j+1）当前占用的最大底部位置
+    const prevMaxBottom: number[] = [];
+
+    for (let i = 0; i < sortedEvents.length; i++) {
+      const currentEvent = sortedEvents[i];
+      const currentStart = dayjs(currentEvent.startTime);
+      const currentEnd = dayjs(currentEvent.endTime);
+      const currentTop = (currentStart.hour() + currentStart.minute() / 60) * HOUR_HEIGHT;
+      const currentBottom = (currentEnd.hour() + currentEnd.minute() / 60) * HOUR_HEIGHT;
+
+      let assignedOrder = -1;
+
+      // 从左到右尝试找到一个可用的列（有时间空隙）
+      for (let j = 0; j < prevMaxBottom.length; j++) {
+        if (currentTop >= prevMaxBottom[j]) {
+          // 找到空隙，可以复用第 j 列
+          assignedOrder = j + 1; // widthOrder 从 1 开始
+          prevMaxBottom[j] = currentBottom; // 更新该列的最大底部
+          break;
+        }
+      }
+
+      if (assignedOrder === -1) {
+        // 没有找到可用列，需要新开一列
+        assignedOrder = prevMaxBottom.length + 1;
+        prevMaxBottom.push(currentBottom);
+      }
+
+      resultMap.set(currentEvent.id, assignedOrder);
+    }
+
+    return resultMap;
+  }, []);
+
+  // 计算事件在时间线上的位置和高度
+  const getEventStyle = useCallback((event: Event, widthOrder: number) => {
+    const startTime = dayjs(event.startTime);
+    const endTime = dayjs(event.endTime);
+    
+    const startHour = startTime.hour();
+    const startMinute = startTime.minute();
+    
+    // 计算顶部位置（从开始时间）
+    const top = (startHour + startMinute / 60) * HOUR_HEIGHT;
+    
+    // 计算高度（持续时间）
+    const durationInMinutes = endTime.diff(startTime, 'minute');
+    const height = Math.max((durationInMinutes / 60) * HOUR_HEIGHT, 30); // 最小高度30
+    
+    // 计算水平位置
+    const left = (widthOrder - 1) * (SINGLE_EVENT_WIDTH + EVENT_PADDING);
+    
+    return { top, height, left, width: SINGLE_EVENT_WIDTH };
+  }, []);
+
   // 渲染日程内容
   const renderDayContent = (date: Date) => {
     const allEvents = getEventsForDate(date);
@@ -150,6 +231,20 @@ export default function DayView() {
     // 分离全天事件和普通事件
     const allDayEvents = allEvents.filter(e => e.isAllDay);
     const regularEvents = allEvents.filter(e => !e.isAllDay);
+    
+    // 计算所有普通事件的 widthOrder
+    const widthOrderMap = calculateWidthOrders(regularEvents);
+    
+    // 计算最大 widthOrder 用于确定内容宽度
+    let maxWidthOrder = 1;
+    widthOrderMap.forEach(order => {
+      if (order > maxWidthOrder) maxWidthOrder = order;
+    });
+    
+    // 计算时间线内容区域所需的总宽度
+    const contentWidth = SCREEN_WIDTH - TIME_LABEL_WIDTH;
+    const totalEventsWidth = maxWidthOrder * (SINGLE_EVENT_WIDTH + EVENT_PADDING);
+    const timelineContentWidth = Math.max(contentWidth, totalEventsWidth);
     
     return (
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
@@ -169,24 +264,56 @@ export default function DayView() {
           </View>
         )}
         
-        {/* 时间线 */}
-        {hours.map(hour => {
-          const hourEvents = regularEvents.filter(event => {
-            const eventHour = new Date(event.startTime).getHours();
-            return eventHour === hour;
-          });
-
-          return (
-            <View key={hour} style={styles.hourRow}>
-              <View style={styles.hourLabelContainer}>
+        {/* 时间线 - 使用相对定位的容器 */}
+        <View style={styles.timelineContainer}>
+          {/* 时间标签列 */}
+          <View style={styles.timeLabelsColumn}>
+            {hours.map(hour => (
+              <View key={hour} style={styles.hourLabelRow}>
                 <Text style={styles.hourLabel}>{`${hour.toString().padStart(2, '0')}:00`}</Text>
               </View>
-              <View style={styles.hourContent}>
-                <View style={styles.hourLine} />
-                {hourEvents.map(event => (
+            ))}
+          </View>
+          
+          {/* 事件内容区域 - 支持水平滚动 */}
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={true}
+            style={styles.eventsScrollView}
+            contentContainerStyle={[
+              styles.eventsScrollContent,
+              { width: timelineContentWidth }
+            ]}
+          >
+            {/* 时间线网格 */}
+            <View style={styles.timelineGrid}>
+              {hours.map(hour => (
+                <View key={hour} style={styles.hourGridRow}>
+                  <View style={styles.hourLine} />
+                </View>
+              ))}
+            </View>
+            
+            {/* 事件层 - 绝对定位 */}
+            <View style={styles.eventsLayer}>
+              {regularEvents.map(event => {
+                const widthOrder = widthOrderMap.get(event.id) || 1;
+                const eventStyle = getEventStyle(event, widthOrder);
+                
+                return (
                   <View
                     key={event.id}
-                    style={[styles.eventBlock, { backgroundColor: event.color }]}>
+                    style={[
+                      styles.eventBlock,
+                      {
+                        backgroundColor: event.color,
+                        top: eventStyle.top,
+                        left: eventStyle.left,
+                        height: eventStyle.height,
+                        width: eventStyle.width,
+                      }
+                    ]}
+                  >
                     <Text style={styles.eventTitle} numberOfLines={1}>
                       {event.title}
                     </Text>
@@ -195,11 +322,11 @@ export default function DayView() {
                       {dayjs(event.endTime).format('HH:mm')}
                     </Text>
                   </View>
-                ))}
-              </View>
+                );
+              })}
             </View>
-          );
-        })}
+          </ScrollView>
+        </View>
       </ScrollView>
     );
   };
@@ -266,12 +393,17 @@ const createStyles = (theme: ReturnType<typeof useAppTheme>) =>
     scrollView: {
       flex: 1,
     },
-    hourRow: {
+    // === 时间线布局样式 ===
+    timelineContainer: {
       flexDirection: 'row',
-      height: 80,
+      flex: 1,
     },
-    hourLabelContainer: {
-      width: 60,
+    timeLabelsColumn: {
+      width: TIME_LABEL_WIDTH,
+    },
+    hourLabelRow: {
+      height: HOUR_HEIGHT,
+      justifyContent: 'flex-start',
       alignItems: 'center',
       paddingTop: 4,
     },
@@ -279,22 +411,38 @@ const createStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontSize: theme.fontSize.xs,
       color: theme.colors.textSecondary,
     },
-    hourContent: {
+    eventsScrollView: {
       flex: 1,
+    },
+    eventsScrollContent: {
       position: 'relative',
+    },
+    timelineGrid: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      top: 0,
+    },
+    hourGridRow: {
+      height: HOUR_HEIGHT,
     },
     hourLine: {
       borderTopWidth: 1,
       borderTopColor: theme.colors.border,
     },
-    eventBlock: {
+    eventsLayer: {
       position: 'absolute',
       left: 0,
-      right: theme.spacing.md,
-      top: 8,
+      top: 0,
+      right: 0,
+      height: 24 * HOUR_HEIGHT, // 24小时的高度
+    },
+    eventBlock: {
+      position: 'absolute',
       borderRadius: theme.borderRadius.md,
       padding: theme.spacing.sm,
       opacity: 0.9,
+      overflow: 'hidden',
     },
     eventTitle: {
       fontSize: theme.fontSize.sm,
