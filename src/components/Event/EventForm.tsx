@@ -121,10 +121,8 @@ export const EventForm: React.FC<EventFormProps> = ({
   // 重复规则设置
   const [isRepeatEvent, setIsRepeatEvent] = useState<boolean>(!!initialEvent?.rrule);
   const [repeatFrequency, setRepeatFrequency] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY'>('DAILY');
-  const [repeatInterval, setRepeatInterval] = useState<number>(1);
-  const [repeatIntervalText, setRepeatIntervalText] = useState<string>('1');
-  const [repeatCount, setRepeatCount] = useState<number>(10);
-  const [repeatCountText, setRepeatCountText] = useState<string>('10');
+  const [repeatInterval, setRepeatInterval] = useState<string>('1');
+  const [repeatCount, setRepeatCount] = useState<string>('10');
 
   // 在编辑模式下，加载现有的提醒设置
   useEffect(() => {
@@ -195,6 +193,22 @@ export const EventForm: React.FC<EventFormProps> = ({
       return;
     }
 
+    // 验证重复规则（如果启用了重复）
+    if (isRepeatEvent) {
+      const interval = parseInt(repeatInterval) || 0;
+      const count = parseInt(repeatCount) || 0;
+      
+      if (interval < 1 || interval > 99) {
+        Alert.alert('提示', '重复间隔必须在 1-99 之间');
+        return;
+      }
+      
+      if (count < 1 || count > 365) {
+        Alert.alert('提示', '重复次数必须在 1-365 之间');
+        return;
+      }
+    }
+
     // 验证提醒时间（如果设置了提醒）
     // 全天事件或固定时间提醒跳过此验证
     if (reminderMinutes.length > 0 && !isAllDay) {
@@ -238,8 +252,8 @@ export const EventForm: React.FC<EventFormProps> = ({
       isLunar: isLunarEvent, // 添加农历标记
       rrule: isRepeatEvent ? generateRRule({
         frequency: repeatFrequency,
-        interval: repeatInterval,
-        count: repeatCount,
+        interval: parseInt(repeatInterval) || 1,
+        count: parseInt(repeatCount) || 1,
       }) : undefined, // 添加重复规则
     };
 
@@ -518,21 +532,13 @@ export const EventForm: React.FC<EventFormProps> = ({
                 <TextInput
                   style={styles.intervalInput}
                   keyboardType="number-pad"
-                  value={repeatIntervalText}
+                  value={repeatInterval}
                   onChangeText={(text) => {
-                    // 允许输入空字符串或数字
-                    if (text === '' || /^\d+$/.test(text)) {
-                      setRepeatIntervalText(text);
-                    }
-                  }}
-                  onBlur={() => {
-                    // 失焦时验证并设置值
-                    const num = parseInt(repeatIntervalText) || 1;
-                    const validNum = Math.max(1, Math.min(99, num));
-                    setRepeatInterval(validNum);
-                    setRepeatIntervalText(String(validNum));
+                    // 完全自由输入，不做任何限制
+                    setRepeatInterval(text);
                   }}
                   placeholder="1-99"
+                  placeholderTextColor={colors.textSecondary}
                 />
               </View>
               <View style={styles.intervalRow}>
@@ -540,21 +546,13 @@ export const EventForm: React.FC<EventFormProps> = ({
                 <TextInput
                   style={styles.intervalInput}
                   keyboardType="number-pad"
-                  value={repeatCountText}
+                  value={repeatCount}
                   onChangeText={(text) => {
-                    // 允许输入空字符串或数字
-                    if (text === '' || /^\d+$/.test(text)) {
-                      setRepeatCountText(text);
-                    }
-                  }}
-                  onBlur={() => {
-                    // 失焦时验证并设置值
-                    const num = parseInt(repeatCountText) || 1;
-                    const validNum = Math.max(1, Math.min(365, num));
-                    setRepeatCount(validNum);
-                    setRepeatCountText(String(validNum));
+                    // 完全自由输入，不做任何限制
+                    setRepeatCount(text);
                   }}
                   placeholder="1-365"
+                  placeholderTextColor={colors.textSecondary}
                 />
               </View>
             </View>
