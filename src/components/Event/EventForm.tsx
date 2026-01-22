@@ -21,6 +21,7 @@ import ReminderService from '../../services/ReminderService';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useLunarStore } from '../../store/lunarStore';
 import LunarDatePicker from '../Common/LunarDatePicker';
+import { RepeatRule, generateRRule } from '../../utils/rruleUtils';
 
 // 预设颜色选项
 const COLOR_OPTIONS = [
@@ -116,6 +117,12 @@ export const EventForm: React.FC<EventFormProps> = ({
     }
     return null;
   });
+
+  // 重复规则设置
+  const [isRepeatEvent, setIsRepeatEvent] = useState<boolean>(!!initialEvent?.rrule);
+  const [repeatFrequency, setRepeatFrequency] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY'>('DAILY');
+  const [repeatInterval, setRepeatInterval] = useState<number>(1);
+  const [repeatCount, setRepeatCount] = useState<number>(10);
 
   // 在编辑模式下，加载现有的提醒设置
   useEffect(() => {
@@ -227,6 +234,11 @@ export const EventForm: React.FC<EventFormProps> = ({
       isAllDay,
       color,
       isLunar: isLunarEvent, // 添加农历标记
+      rrule: isRepeatEvent ? generateRRule({
+        frequency: repeatFrequency,
+        interval: repeatInterval,
+        count: repeatCount,
+      }) : undefined, // 添加重复规则
     };
 
     // 提交日程数据，并传递提醒设置
@@ -457,6 +469,76 @@ export const EventForm: React.FC<EventFormProps> = ({
           </View>
         )}
 
+        {/* 重复规则设置 */}
+        <View style={styles.formGroup}>
+          <View style={styles.switchRow}>
+            <Text style={styles.label}>重复日程</Text>
+            <Switch
+              value={isRepeatEvent}
+              onValueChange={setIsRepeatEvent}
+              trackColor={{ false: colors.border, true: colors.primary }}
+            />
+          </View>
+          {isRepeatEvent && (
+            <View style={styles.repeatOptions}>
+              <Text style={styles.repeatLabel}>重复频率</Text>
+              <View style={styles.frequencyRow}>
+                {(['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'] as const).map((freq) => (
+                  <TouchableOpacity
+                    key={freq}
+                    style={[
+                      styles.frequencyButton,
+                      repeatFrequency === freq && styles.frequencyButtonActive,
+                    ]}
+                    onPress={() => setRepeatFrequency(freq)}>
+                    <Text
+                      style={[
+                        styles.frequencyButtonText,
+                        repeatFrequency === freq && styles.frequencyButtonTextActive,
+                      ]}>
+                      {freq === 'DAILY' && '每天'}
+                      {freq === 'WEEKLY' && '每周'}
+                      {freq === 'MONTHLY' && '每月'}
+                      {freq === 'YEARLY' && '每年'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={styles.intervalRow}>
+                <Text style={styles.repeatLabel}>
+                  间隔（
+                  {repeatFrequency === 'DAILY' && '天'}
+                  {repeatFrequency === 'WEEKLY' && '周'}
+                  {repeatFrequency === 'MONTHLY' && '月'}
+                  {repeatFrequency === 'YEARLY' && '年'}
+                  ）
+                </Text>
+                <TextInput
+                  style={styles.intervalInput}
+                  keyboardType="number-pad"
+                  value={String(repeatInterval)}
+                  onChangeText={(text) => {
+                    const num = parseInt(text) || 1;
+                    setRepeatInterval(Math.max(1, Math.min(99, num)));
+                  }}
+                />
+              </View>
+              <View style={styles.intervalRow}>
+                <Text style={styles.repeatLabel}>重复次数</Text>
+                <TextInput
+                  style={styles.intervalInput}
+                  keyboardType="number-pad"
+                  value={String(repeatCount)}
+                  onChangeText={(text) => {
+                    const num = parseInt(text) || 1;
+                    setRepeatCount(Math.max(1, Math.min(365, num)));
+                  }}
+                />
+              </View>
+            </View>
+          )}
+        </View>
+
         {/* 地点 */}
         <View style={styles.formGroup}>
           <Text style={styles.label}>地点</Text>
@@ -684,5 +766,62 @@ const createStyles = (colors: AppColors) =>
       fontSize: 12,
       color: colors.textSecondary,
       marginTop: 8,
+    },
+    // === 重复规则样式 ===
+    repeatOptions: {
+      marginTop: 12,
+      padding: 12,
+      backgroundColor: colors.background,
+      borderRadius: 8,
+    },
+    repeatLabel: {
+      fontSize: 14,
+      color: colors.text,
+      marginBottom: 8,
+      fontWeight: '500',
+    },
+    frequencyRow: {
+      flexDirection: 'row',
+      gap: 8,
+      marginBottom: 12,
+    },
+    frequencyButton: {
+      flex: 1,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      alignItems: 'center',
+    },
+    frequencyButtonActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    frequencyButtonText: {
+      fontSize: 12,
+      color: colors.text,
+    },
+    frequencyButtonTextActive: {
+      color: '#FFFFFF',
+      fontWeight: '600',
+    },
+    intervalRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 8,
+    },
+    intervalInput: {
+      width: 80,
+      backgroundColor: colors.surface,
+      borderRadius: 8,
+      padding: 8,
+      fontSize: 14,
+      color: colors.text,
+      borderWidth: 1,
+      borderColor: colors.border,
+      textAlign: 'center',
     },
   });

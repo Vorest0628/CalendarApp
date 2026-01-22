@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { Event } from '../types/event';
 import { EventDAO } from '../database/EventDAO';
 import ReminderService from '../services/ReminderService';
+import { generateOccurrences, isDateInRRule } from '../utils/rruleUtils';
 
 let eventDAO: EventDAO | null = null;
 
@@ -207,14 +208,47 @@ export const useEventStore = create<EventStore>((set, get) => ({
 
   getEventsForDate: (date: Date) => {
     const { events } = get();
-    return events.filter(event => {
+    const result: Event[] = [];
+    
+    events.forEach(event => {
+      // 检查普通事件（非重复事件）
       const eventDate = new Date(event.startTime);
-      return (
+      const isSameDate = (
         eventDate.getFullYear() === date.getFullYear() &&
         eventDate.getMonth() === date.getMonth() &&
         eventDate.getDate() === date.getDate()
       );
+      
+      if (isSameDate) {
+        result.push(event);
+      } else if (event.rrule) {
+        // 检查重复事件：判断指定日期是否在重复规则中
+        try {
+          if (isDateInRRule(date, event.startTime, event.rrule)) {
+            // 创建该日期的事件实例（保持原始时间）
+            const duration = event.endTime.getTime() - event.startTime.getTime();
+            const instanceStart = new Date(date);
+            instanceStart.setHours(
+              event.startTime.getHours(),
+              event.startTime.getMinutes(),
+              event.startTime.getSeconds(),
+              event.startTime.getMilliseconds()
+            );
+            const instanceEnd = new Date(instanceStart.getTime() + duration);
+            
+            result.push({
+              ...event,
+              startTime: instanceStart,
+              endTime: instanceEnd,
+            });
+          }
+        } catch (error) {
+          console.error('Failed to check rrule for event:', event.id, error);
+        }
+      }
     });
+    
+    return result;
   },
 
   clearEvents: () => {

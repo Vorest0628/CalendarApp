@@ -13,6 +13,7 @@ import {
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Event } from '../../types/event';
 import { useAppTheme, AppColors } from '../../theme/useAppTheme';
+import { parseRRule, getRuleDescription } from '../../utils/rruleUtils';
 
 interface EventDetailProps {
   event: Event; // 日程数据
@@ -143,7 +144,19 @@ export const EventDetail: React.FC<EventDetailProps> = ({
           <View style={styles.section}>
             <View style={styles.infoRow}>
               <Icon name="repeat" size={20} color={colors.textSecondary} />
-              <Text style={styles.infoText}>重复日程</Text>
+              <View style={styles.repeatInfoContainer}>
+                <Text style={styles.infoText}>重复日程</Text>
+                {(() => {
+                  const rule = parseRRule(event.rrule);
+                  if (rule) {
+                    const description = getRuleDescription(rule);
+                    return (
+                      <Text style={styles.repeatDescription}>{description}</Text>
+                    );
+                  }
+                  return null;
+                })()}
+              </View>
             </View>
           </View>
         )}
@@ -232,5 +245,14 @@ const createStyles = (colors: AppColors) =>
       fontSize: 12,
       color: colors.textSecondary,
       marginTop: 4,
+    },
+    repeatInfoContainer: {
+      flex: 1,
+    },
+    repeatDescription: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      marginTop: 4,
+      lineHeight: 20,
     },
   });

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, memo, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, PanResponder, Dimensions } from 'react-native';
 import dayjs from 'dayjs';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { useEventStore } from '../../store/eventStore';
 import { useSettingsStore } from '../../store/settingsStore';
@@ -39,16 +40,9 @@ const WeekDayCell = memo<WeekDayCellProps>(
       state => isSameDay(date, state.selectedDate)
     );
 
-    // 🔥 优化：selector 返回事件数量，而非事件数组
+    // 🔥 优化：使用 getEventsForDate 检查是否有事件（包括重复事件）
     const hasEvents = useEventStore(state => {
-      return state.events.some(event => {
-        const eventDate = new Date(event.startTime);
-        return (
-          eventDate.getFullYear() === date.getFullYear() &&
-          eventDate.getMonth() === date.getMonth() &&
-          eventDate.getDate() === date.getDate()
-        );
-      });
+      return state.getEventsForDate(date).length > 0;
     });
 
     const isTodayDate = isToday(date);
@@ -342,10 +336,8 @@ export default function WeekView() {
 
   // 获取某一天的所有事件，分离全天事件和普通事件
   const getEventsForDay = (date: Date) => {
-    const dayEvents = events.filter(event => {
-      const eventDate = dayjs(event.startTime);
-      return eventDate.isSame(dayjs(date), 'day');
-    });
+    // 🔥 使用 getEventsForDate 获取事件（包含重复事件展开）
+    const dayEvents = useEventStore.getState().getEventsForDate(date);
     
     // 分离全天事件和普通事件
     const allDayEvents = dayEvents.filter(e => e.isAllDay);
@@ -363,22 +355,35 @@ export default function WeekView() {
   }, [weekDays, events]);
 
   // 🔥 优化：使用新的 WeekDayCell 组件，每个单元格独立订阅自己的状态
-  const renderDateRow = (weekDaysData: Date[]) => (
-    <View style={styles.dateRow}>
-      {weekDaysData.map((date, index) => (
-        <WeekDayCell
-          key={date.toISOString()}
-          date={date}
-          weekDayLabel={weekDayLabels[index]}
-          showLunar={showLunar}
-          showTraditionalFestivals={showTraditionalFestivals}
-          showSolarTerms={showSolarTerms}
-          theme={theme}
-          onPress={handleDatePress}
-        />
-      ))}
-    </View>
-  );
+  const renderDateRow = (weekDaysData: Date[]) => {
+    // 获取第一天的年月信息用于显示
+    const firstDay = weekDaysData[0];
+    const yearMonth = `${firstDay.getFullYear()}年${firstDay.getMonth() + 1}月`;
+    
+    return (
+      <View style={styles.dateRowWithHeader}>
+        {/* 左侧年月标签 */}
+        <View style={styles.yearMonthLabel}>
+          <Text style={styles.yearMonthText}>{yearMonth}</Text>
+        </View>
+        {/* 日期单元格 */}
+        <View style={styles.dateRow}>
+          {weekDaysData.map((date, index) => (
+            <WeekDayCell
+              key={date.toISOString()}
+              date={date}
+              weekDayLabel={weekDayLabels[index]}
+              showLunar={showLunar}
+              showTraditionalFestivals={showTraditionalFestivals}
+              showSolarTerms={showSolarTerms}
+              theme={theme}
+              onPress={handleDatePress}
+            />
+          ))}
+        </View>
+      </View>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -423,9 +428,14 @@ export default function WeekView() {
                         { backgroundColor: event.color || theme.colors.primary },
                       ]}
                       activeOpacity={0.8}>
-                      <Text style={styles.allDayEventTitle} numberOfLines={1}>
-                        {event.title}
-                      </Text>
+                      <View style={styles.allDayEventHeader}>
+                        <Text style={styles.allDayEventTitle} numberOfLines={1}>
+                          {event.title}
+                        </Text>
+                        {event.rrule && (
+                          <Icon name="repeat" size={10} color="#FFFFFF" style={styles.repeatIcon} />
+                        )}
+                      </View>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -474,9 +484,14 @@ export default function WeekView() {
                           },
                         ]}
                         activeOpacity={0.8}>
-                        <Text style={styles.eventTitle} numberOfLines={1}>
-                          {event.title}
-                        </Text>
+                        <View style={styles.eventHeader}>
+                          <Text style={styles.eventTitle} numberOfLines={1}>
+                            {event.title}
+                          </Text>
+                          {event.rrule && (
+                            <Icon name="repeat" size={10} color="#FFFFFF" style={styles.repeatIcon} />
+                          )}
+                        </View>
                         <Text style={styles.eventTime} numberOfLines={1}>
                           {dayjs(event.startTime).format('HH:mm')} - {dayjs(event.endTime).format('HH:mm')}
                         </Text>
@@ -506,11 +521,26 @@ const createStyles = (theme: ReturnType<typeof useAppTheme>) =>
     weekWrapper: {
       width: SCREEN_WIDTH,
     },
-    dateRow: {
+    dateRowWithHeader: {
       flexDirection: 'row',
       borderBottomWidth: 1,
       borderBottomColor: theme.colors.border,
       paddingVertical: theme.spacing.sm,
+    },
+    yearMonthLabel: {
+      width: 50,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingLeft: 8,
+    },
+    yearMonthText: {
+      fontSize: theme.fontSize.xs,
+      color: theme.colors.textSecondary,
+      fontWeight: '600',
+    },
+    dateRow: {
+      flex: 1,
+      flexDirection: 'row',
     },
     // 全天事件区域样式
     allDaySection: {
@@ -524,6 +554,7 @@ const createStyles = (theme: ReturnType<typeof useAppTheme>) =>
       width: 50,
       justifyContent: 'center',
       alignItems: 'center',
+      paddingLeft: 8,
     },
     allDayLabelText: {
       fontSize: theme.fontSize.xs,
@@ -546,7 +577,13 @@ const createStyles = (theme: ReturnType<typeof useAppTheme>) =>
       marginBottom: 2,
       opacity: 0.7,
     },
+    allDayEventHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
     allDayEventTitle: {
+      flex: 1,
       color: '#FFFFFF',
       fontSize: theme.fontSize.xs,
       fontWeight: '600',
@@ -560,6 +597,7 @@ const createStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     timeLabels: {
       width: 50,
+      paddingLeft: 8,
     },
     hourRow: {
       height: 60,
@@ -593,10 +631,19 @@ const createStyles = (theme: ReturnType<typeof useAppTheme>) =>
       padding: 4,
       overflow: 'hidden',
     },
+    eventHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
     eventTitle: {
+      flex: 1,
       color: '#FFFFFF',
       fontSize: theme.fontSize.xs,
       fontWeight: '600',
+    },
+    repeatIcon: {
+      marginLeft: 2,
     },
     eventTime: {
       color: '#FFFFFF',

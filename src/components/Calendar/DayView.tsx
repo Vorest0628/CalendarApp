@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, Animated, PanResponder, Dimensions } from 'react-native';
 import dayjs from 'dayjs';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { useEventStore } from '../../store/eventStore';
 import { useSettingsStore } from '../../store/settingsStore';
@@ -256,9 +257,14 @@ export default function DayView() {
               <View
                 key={event.id}
                 style={[styles.allDayEventBlock, { backgroundColor: event.color }]}>
-                <Text style={styles.allDayEventTitle} numberOfLines={1}>
-                  {event.title}
-                </Text>
+                <View style={styles.allDayEventHeader}>
+                  <Text style={styles.allDayEventTitle} numberOfLines={1}>
+                    {event.title}
+                  </Text>
+                  {event.rrule && (
+                    <Icon name="repeat" size={12} color="#FFFFFF" style={styles.repeatIcon} />
+                  )}
+                </View>
               </View>
             ))}
           </View>
@@ -314,9 +320,14 @@ export default function DayView() {
                       }
                     ]}
                   >
-                    <Text style={styles.eventTitle} numberOfLines={1}>
-                      {event.title}
-                    </Text>
+                    <View style={styles.eventHeader}>
+                      <Text style={styles.eventTitle} numberOfLines={1}>
+                        {event.title}
+                      </Text>
+                      {event.rrule && (
+                        <Icon name="repeat" size={12} color="#FFFFFF" style={styles.repeatIcon} />
+                      )}
+                    </View>
                     <Text style={styles.eventTime} numberOfLines={1}>
                       {dayjs(event.startTime).format('HH:mm')} -{' '}
                       {dayjs(event.endTime).format('HH:mm')}
@@ -444,10 +455,19 @@ const createStyles = (theme: ReturnType<typeof useAppTheme>) =>
       opacity: 0.9,
       overflow: 'hidden',
     },
+    eventHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
     eventTitle: {
+      flex: 1,
       fontSize: theme.fontSize.sm,
       fontWeight: 'bold',
       color: '#FFFFFF',
+    },
+    repeatIcon: {
+      marginLeft: 4,
     },
     eventTime: {
       fontSize: theme.fontSize.xs,
@@ -492,7 +512,13 @@ const createStyles = (theme: ReturnType<typeof useAppTheme>) =>
       marginBottom: 4,
       opacity: 0.6,
     },
+    allDayEventHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
     allDayEventTitle: {
+      flex: 1,
       fontSize: theme.fontSize.sm,
       fontWeight: '600',
       color: '#FFFFFF',

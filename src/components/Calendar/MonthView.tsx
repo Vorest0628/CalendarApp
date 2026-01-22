@@ -37,16 +37,9 @@ const DayCell = memo<DayCellProps>(
       state => isSameDay(date, state.selectedDate)
     );
 
-    // 🔥 优化：selector 返回事件数量，而非事件数组
+    // 🔥 优化：使用 getEventsForDate 获取事件数量（包含重复事件）
     const eventsCount = useEventStore(state => {
-      return state.events.filter(event => {
-        const eventDate = new Date(event.startTime);
-        return (
-          eventDate.getFullYear() === date.getFullYear() &&
-          eventDate.getMonth() === date.getMonth() &&
-          eventDate.getDate() === date.getDate()
-        );
-      }).length;
+      return state.getEventsForDate(date).length;
     });
 
     const isTodayDate = isToday(date);
