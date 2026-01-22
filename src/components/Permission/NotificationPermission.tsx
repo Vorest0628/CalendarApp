@@ -12,7 +12,6 @@ import {
   Modal,
   Pressable,
 } from 'react-native';
-import { BlurView } from '@react-native-community/blur';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import NotificationService from '../../services/NotificationService';
 import { colors } from '../../theme/colors';
@@ -100,19 +99,9 @@ const NotificationPermission: React.FC<NotificationPermissionProps> = ({
       statusBarTranslucent
       onRequestClose={() => setShowPrompt(false)}>
       <Pressable 
-        style={styles.backdrop}
-        onPress={() => setShowPrompt(false)}>
-        {Platform.OS === 'ios' ? (
-          <BlurView
-            style={StyleSheet.absoluteFill}
-            blurType="dark"
-            blurAmount={10}
-            reducedTransparencyFallbackColor={colors.text}
-          />
-        ) : (
-          <View style={styles.androidBackdrop} />
-        )}
-      </Pressable>
+        style={[styles.backdrop, styles.androidBackdrop]}
+        onPress={() => setShowPrompt(false)}
+      />
       
       <View style={styles.centeredView}>
         <View style={styles.container}>

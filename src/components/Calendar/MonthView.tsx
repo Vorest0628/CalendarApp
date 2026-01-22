@@ -177,7 +177,7 @@ const createDayCellStyles = (theme: ReturnType<typeof useAppTheme>) =>
 // ==================== MonthView 组件 ====================
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25; // 滑动阈值
+const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.15; // 滑动阈值
 
 export default function MonthView() {
   const theme = useAppTheme();

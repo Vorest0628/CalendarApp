@@ -14,7 +14,7 @@ import { FullDateInfo } from '../../types/lunar';
 
 const HOUR_HEIGHT = 60; // 每小时的高度
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
+const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.15;
 
 // ==================== WeekDayCell 组件 ====================
 

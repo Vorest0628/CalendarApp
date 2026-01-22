@@ -10,7 +10,7 @@ import { getDayLazyLoadData } from '../../utils/lazyLoadUtils';
 import { Event } from '../../types/event';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
+const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.15;
 
 // 时间线常量
 const HOUR_HEIGHT = 80; // 每小时的高度
